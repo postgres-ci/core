@@ -1,7 +1,20 @@
 create or replace function users.test_add() returns void as $$
+    declare 
+        _user_id int;
     begin 
 
-        IF assert.not_null(users.add('login', 'password', 'Elephant Sam', 'samelephant82@gmail.com', true)) THEN 
+        _user_id = users.add('login', 'password', 'Elephant Sam', 'samelephant82@gmail.com', true);
+
+        IF assert.not_null(_user_id) THEN 
+
+            IF assert.true((SELECT is_superuser FROM postgres_ci.users WHERE user_id = _user_id)) THEN 
+
+                PERFORM assert.equal(
+                    'Elephant Sam',
+                    (SELECT user_name FROM postgres_ci.users WHERE user_id = _user_id)
+                );
+
+            END IF;
 
             PERFORM assert.exception(
                 $sql$ SELECT users.add('login', 'password', 'Elephant Sam', 'samelephant83@gmail.com', true) $sql$, 
@@ -29,4 +42,4 @@ create or replace function users.test_add() returns void as $$
 
         END IF;
     end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
