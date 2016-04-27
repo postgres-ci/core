@@ -1,9 +1,9 @@
 \i project/test_github_name.sql
-
+\i users/add.sql
 
 
 select assert.add_test('project', 'test_github_name');
-
+select assert.add_test('users', 'test_add');
 
 select 
     namespace || '.' || procedure as func,
