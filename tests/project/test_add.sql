@@ -19,9 +19,13 @@ create or replace function project.test_add() returns void as $$
 
             IF assert.not_null(_project_id) THEN 
 
-                PERFORM assert.equal(_project_name,      (SELECT project_name  FROM postgres_ci.projects WHERE project_id = _project_id));
-                PERFORM assert.equal('postgres-ci/core', (SELECT github_name   FROM postgres_ci.projects WHERE project_id = _project_id));
-                PERFORM assert.equal('Ho-Ho-Ho',         (SELECT github_secret FROM postgres_ci.projects WHERE project_id = _project_id));
+                PERFORM   
+                    assert.equal(_project_name,      project_name),
+                    assert.equal('postgres-ci/core', github_name),
+                    assert.equal('Ho-Ho-Ho',         github_secret)
+                FROM postgres_ci.projects 
+                WHERE project_id = _project_id;
+  
             END IF;
 
         END IF;

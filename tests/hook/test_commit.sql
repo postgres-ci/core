@@ -34,30 +34,14 @@ create or replace function hook.test_commit() returns void as $$
 
                 IF assert.not_null(_commit_id) THEN 
 
-                    PERFORM assert.equal(
-                        project.get_branch_id(_project_id, 'master'),
-                        (SELECT branch_id FROM postgres_ci.commits WHERE commit_id = _commit_id)
-                    );
-
-                    PERFORM assert.equal(
-                        _commit_sha,
-                        (SELECT commit_sha FROM postgres_ci.commits WHERE commit_id = _commit_id)
-                    );
-
-                    PERFORM assert.equal(
-                        CURRENT_TIMESTAMP - '1 day'::interval,
-                        (SELECT committed_at FROM postgres_ci.commits WHERE commit_id = _commit_id)
-                    );
-
-                    PERFORM assert.equal(
-                        'Elephant Sam',
-                        (SELECT committer_name FROM postgres_ci.commits WHERE commit_id = _commit_id)
-                    );
-
-                    PERFORM assert.equal(
-                        'samelephant82@gmail.com',
-                        (SELECT committer_email FROM postgres_ci.commits WHERE commit_id = _commit_id)
-                    );
+                    PERFORM 
+                        assert.equal(project.get_branch_id(_project_id, 'master'), branch_id), 
+                        assert.equal(_commit_sha, commit_sha),
+                        assert.equal(CURRENT_TIMESTAMP - '1 day'::interval, committed_at),
+                        assert.equal('Elephant Sam', committer_name),
+                        assert.equal('samelephant82@gmail.com', committer_email)
+                    FROM postgres_ci.commits 
+                    WHERE commit_id = _commit_id;
                     
                 END IF;
 

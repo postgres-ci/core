@@ -28,7 +28,7 @@ create or replace function project.test_get_branch_id() returns void as $$
 
                     IF assert.not_null(_branch_id) THEN 
 
-                        PERFORM assert.equal(_branch_id, project.get_branch_id(_project_id, 'master'));
+                        PERFORM assert.equal(_branch_id,     project.get_branch_id(_project_id, 'master'));
                         PERFORM assert.not_equal(_branch_id, project.get_branch_id(_project_id, 'master2'));
 
                     END IF;

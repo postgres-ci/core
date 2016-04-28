@@ -1,4 +1,4 @@
--- :~/tests$ psql -d postgres_ci < manual_test_runner.sql
+-- :~/tests$ psql -U tester -d postgres_ci < manual_test_runner.sql
 \i tests.sql
 
 select 

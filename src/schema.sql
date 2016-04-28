@@ -37,7 +37,7 @@ create index idx_sessions_expires_at on postgres_ci.sessions(expires_at);
 create type postgres_ci.status as enum(
     'pending',
     'accepted',
-    'running'
+    'running',
     'failed',
     'success'
 );
@@ -140,9 +140,9 @@ create index idx_task_build  on postgres_ci.tasks(build_id) where build_id is no
 /*
 
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
-select * from project.add('Test', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/worker/tmp/testrepo', '');
+select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
 
-SELECT * FROM project.add_commit(1, 'master', 'ef333e569833bbb7f3e45edee7f4984525a6ca3a', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
+SELECT * FROM project.add_commit(1, 'master', 'sha', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
 select task.new(1);
 */
