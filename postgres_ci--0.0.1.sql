@@ -60,7 +60,7 @@ create table postgres_ci.projects(
     project_id       serial  primary key,
     project_name     text    not null,
     project_token    uuid    not null default gen_random_uuid(),  
-    project_owner_id int     not null references postgres_ci.users(user_id),    
+    project_owner_id int     not null,    
     repository_url   text    not null,
     github_name      text    not null,
     github_secret    text    not null,
@@ -72,6 +72,8 @@ create table postgres_ci.projects(
 );
 
 create unique index udx_is_github_repo on postgres_ci.projects (github_name) where github_name <> '';
+alter table postgres_ci.projects add constraint fk_project_owner_id foreign key  (project_owner_id) references postgres_ci.users(user_id);
+
 
 create table postgres_ci.branches(
     branch_id  serial primary key,
@@ -624,9 +626,9 @@ create or replace function task.new(
     end;
 $$ language plpgsql security definer;
 
-/* source file: src/functions/hook/commit_native.sql */
+/* source file: src/functions/hook/commit.sql */
 
-create or replace function hook.commit_native(
+create or replace function hook.commit(
     _token           uuid,
     _branch          text,
     _commit_sha      text,

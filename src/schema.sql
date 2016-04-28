@@ -46,7 +46,7 @@ create table postgres_ci.projects(
     project_id       serial  primary key,
     project_name     text    not null,
     project_token    uuid    not null default gen_random_uuid(),  
-    project_owner_id int     not null references postgres_ci.users(user_id),    
+    project_owner_id int     not null,    
     repository_url   text    not null,
     github_name      text    not null,
     github_secret    text    not null,

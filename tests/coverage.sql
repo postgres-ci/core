@@ -1,6 +1,5 @@
 SELECT 
-    namespace.nspname AS namespace,
-    func.proname      AS procedure,
+    namespace.nspname || '.' || func.proname AS func,
     CASE WHEN tests.proname IS NOT NULL 
         THEN '+' 
         ELSE '-' 
@@ -13,4 +12,4 @@ WHERE namespace.nspname NOT LIKE 'pg_%'
 AND   namespace.nspname NOT IN ('assert', 'information_schema')
 AND   func.proname      NOT LIKE 'test_%'
 AND   func.prolang      NOT IN (12, 13) -- @see pg_language
-ORDER BY covered DESC, namespace, procedure;
+ORDER BY covered DESC, func;
