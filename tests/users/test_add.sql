@@ -15,6 +15,8 @@ create or replace function users.test_add() returns void as $$
                 );
 
             END IF;
+            
+            PERFORM assert.not_null(auth.login('login', 'password'));
 
             PERFORM assert.exception(
                 $sql$ SELECT users.add('login', 'password', 'Elephant Sam', 'samelephant83@gmail.com', true) $sql$, 

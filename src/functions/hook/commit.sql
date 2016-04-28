@@ -1,4 +1,4 @@
-create or replace function hook.commit_native(
+create or replace function hook.commit(
     _token           uuid,
     _branch          text,
     _commit_sha      text,

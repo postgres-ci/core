@@ -1,9 +1,5 @@
-\i project/test_github_name.sql
-\i users/add.sql
-
-
-select assert.add_test('project', 'test_github_name');
-select assert.add_test('users', 'test_add');
+-- :~/tests$ psql -d postgres_ci < manual_test_runner.sql
+\i tests.sql
 
 select 
     namespace || '.' || procedure as func,
@@ -16,3 +12,5 @@ select
     to_json(errors) as errors,
     extract(epoch from finished_at - started_at) || 's' as duration
 from  assert.test_runner();
+
+\i coverage.sql;

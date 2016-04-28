@@ -58,6 +58,8 @@ create table postgres_ci.projects(
 );
 
 create unique index udx_is_github_repo on postgres_ci.projects (github_name) where github_name <> '';
+alter table postgres_ci.projects add constraint fk_project_owner_id foreign key  (project_owner_id) references postgres_ci.users(user_id);
+
 
 create table postgres_ci.branches(
     branch_id  serial primary key,
