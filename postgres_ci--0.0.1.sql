@@ -105,11 +105,15 @@ create table postgres_ci.builds(
     config      text      not null,
     status      postgres_ci.status not null,
     error       text not null default '',
+    created_at  timestamptz not null default current_timestamp,
     started_at  timestamptz not null default current_timestamp,
     finished_at timestamptz
 );
 
+create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
+
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
+
 
 create table postgres_ci.parts(
     part_id             serial  primary key,
@@ -134,51 +138,34 @@ create table postgres_ci.tests(
 
 create index idx_part_tests on postgres_ci.tests(part_id);
 
-create unlogged table postgres_ci.tasks(
-    task_id    serial      primary key,
-    commit_id  int         not null references postgres_ci.commits(commit_id),
-    build_id   int         references postgres_ci.builds(build_id),
-    status     postgres_ci.status not null default 'pending',
-    created_at timestamptz not null default current_timestamp,
-    updated_at timestamptz not null default current_timestamp
-);
-
-create index idx_task_status on postgres_ci.tasks(status) where status in ('pending', 'accepted');
-create index idx_task_build  on postgres_ci.tasks(build_id) where build_id is not null;
-
-
-
-
-
 
 /*
 
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
-select * from project.add('Postgres-CI Core', 169, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
+select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
 
-SELECT * FROM project.add_commit(85, 'master', '64db02cbcb8d0e81c5db15bc42b1e83f143c9445', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
+SELECT * FROM project.add_commit(1, 'master', '6761e23d03d6578dd197812801f0086e38558ddf', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
-select task.new(1);
+select build.new(1);
 */
+
+
 
 /* source file: src/packages.sql */
 
 create schema auth;
-create schema task;
 create schema hook;
 create schema users;
 create schema build;
 create schema project;
 
 grant usage on schema auth    to public;
-grant usage on schema task    to public;
 grant usage on schema hook    to public;
 grant usage on schema users   to public;
 grant usage on schema build   to public;
 grant usage on schema project to public;
 grant usage on schema postgres_ci to public;
 grant execute on all functions in schema auth    to public;
-grant execute on all functions in schema task    to public;
 grant execute on all functions in schema hook    to public;
 grant execute on all functions in schema users   to public;
 grant execute on all functions in schema build   to public;
@@ -288,6 +275,28 @@ create or replace function auth.logout(_session_id text) returns void as $$
     end;
 $$ language plpgsql security definer;
 
+/* source file: src/functions/build/accept.sql */
+
+create or replace function build.accept(
+    _build_id int
+) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.builds 
+            SET status = 'accepted' 
+        WHERE status   = 'pending' 
+        AND   build_id = _build_id;
+
+        IF NOT FOUND THEN 
+        
+            SET log_min_messages to LOG;
+
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
+    end;
+$$ language plpgsql security definer;
+
 /* source file: src/functions/build/add_part.sql */
 
 create or replace function build.add_part(
@@ -355,21 +364,44 @@ create or replace function build.add_part(
 $$ language plpgsql security definer;
 
 
-/* source file: src/functions/build/start.sql */
+/* source file: src/functions/build/fetch.sql */
 
-create or replace function build.start(
-    _task_id            int,
-    out build_id       int,
-    out repository_url text,
-    out branch         text,
-    out revision       text
+create or replace function build.fetch(
+    out build_id   int,
+    out created_at timestamptz
 ) returns record as $$
-    declare 
-        _commit_id  int;
-        _project_id int;
     begin 
 
-        SELECT commit_id INTO _commit_id FROM postgres_ci.tasks WHERE task_id = _task_id;
+        SELECT 
+            B.build_id,
+            B.created_at
+                INTO 
+                    build_id,
+                    created_at
+        FROM postgres_ci.builds AS B
+        WHERE B.status = 'pending' 
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED;
+
+        IF NOT FOUND THEN 
+        
+            SET log_min_messages to LOG;
+
+            RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
+        END IF;
+
+        UPDATE postgres_ci.builds AS B SET status = 'accepted' WHERE B.build_id = "fetch".build_id;
+
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/build/new.sql */
+
+create or replace function build.new(
+    _commit_id  int,
+    out build_id int
+) returns int as $$
+    begin 
 
         INSERT INTO postgres_ci.builds (
             commit_id,
@@ -378,14 +410,39 @@ create or replace function build.start(
         ) VALUES (
             _commit_id,
             '',
-            'running'
+            'pending'
         ) RETURNING builds.build_id INTO build_id;
 
-        UPDATE postgres_ci.tasks 
+        PERFORM pg_notify('postgres-ci::tasks', (
+                SELECT to_json(T.*) FROM (
+                    SELECT 
+                        new.build_id      AS build_id,
+                        CURRENT_TIMESTAMP AS created_at
+                ) T
+            )::text
+        );
+
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/build/start.sql */
+
+create or replace function build.start(
+    _build_id          int,
+    out repository_url text,
+    out branch         text,
+    out revision       text
+) returns record as $$
+    declare 
+        _commit_id  int;
+        _project_id int;
+    begin
+
+        UPDATE postgres_ci.builds AS B
             SET 
-                status   = 'running',
-                build_id = start.build_id 
-        WHERE task_id = _task_id;
+                status = 'running'
+        WHERE B.build_id = _build_id 
+        RETURNING B.commit_id INTO _commit_id;
 
         SELECT 
             P.project_id,
@@ -402,7 +459,7 @@ create or replace function build.start(
         JOIN postgres_ci.commits  AS C ON C.branch_id = B.branch_id
         WHERE C.commit_id = _commit_id;
 
-        UPDATE postgres_ci.projects SET last_build_id = start.build_id  WHERE project_id = _project_id;
+        UPDATE postgres_ci.projects SET last_build_id = _build_id  WHERE project_id = _project_id;
     end;
 $$ language plpgsql security definer;
 
@@ -474,7 +531,7 @@ create or replace function project.add_commit(
             _author_email
         ) RETURNING commits.commit_id INTO commit_id;
 
-        PERFORM task.new(commit_id);
+        PERFORM build.new(commit_id);
 
     end;
 $$ language plpgsql security definer;
@@ -546,83 +603,6 @@ create or replace function project.github_name(_repository_url text) returns tex
             ELSE 
                 return '';
         END CASE;
-    end;
-$$ language plpgsql security definer;
-
-/* source file: src/functions/task/accept.sql */
-
-create or replace function task.accept(
-    _task_id int
-) returns void as $$
-    begin 
-
-        UPDATE postgres_ci.tasks SET status = 'accepted' WHERE status = 'pending' AND task_id = _task_id;
-
-        IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
-            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
-        END IF;
-
-    end;
-$$ language plpgsql security definer;
-
-/* source file: src/functions/task/get.sql */
-
-create or replace function task.get(
-    out task_id    int,
-    out created_at timestamptz
-) returns record as $$
-    begin 
-    
-        SELECT 
-            T.task_id,
-            T.created_at
-                INTO 
-                    task_id,
-                    created_at
-        FROM postgres_ci.tasks AS T
-        WHERE T.status = 'pending' 
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED;
-
-        IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
-            RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
-        END IF;
-
-        UPDATE postgres_ci.tasks SET status = 'accepted' WHERE tasks.task_id = get.task_id;
-
-    end;
-$$ language plpgsql security definer;
-
-/* source file: src/functions/task/new.sql */
-
-create or replace function task.new(
-    _commit_id  int,
-    out task_id int
-) returns int as $$
-    begin 
-
-        INSERT INTO postgres_ci.tasks (
-            commit_id,
-            status
-        ) VALUES (
-            _commit_id,
-            'pending'
-        ) RETURNING tasks.task_id INTO task_id;
-
-        PERFORM pg_notify('postgres-ci', (
-                SELECT to_json(T.*) FROM (
-                    SELECT 
-                        new.task_id       AS task_id,
-                        CURRENT_TIMESTAMP AS created_at
-                ) T
-            )::text
-        );
     end;
 $$ language plpgsql security definer;
 

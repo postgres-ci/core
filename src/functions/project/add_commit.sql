@@ -32,7 +32,7 @@ create or replace function project.add_commit(
             _author_email
         ) RETURNING commits.commit_id INTO commit_id;
 
-        PERFORM task.new(commit_id);
+        PERFORM build.new(commit_id);
 
     end;
 $$ language plpgsql security definer;

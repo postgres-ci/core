@@ -19,7 +19,6 @@ src/packages.sql
 src/functions/auth/*.sql
 src/functions/build/*.sql
 src/functions/project/*.sql
-src/functions/task/*.sql
 src/functions/hook/*.sql
 src/functions/users/*.sql"
 

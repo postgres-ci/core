@@ -1,17 +1,17 @@
-create or replace function task.get(
-    out task_id    int,
+create or replace function build.fetch(
+    out build_id   int,
     out created_at timestamptz
 ) returns record as $$
     begin 
-    
+
         SELECT 
-            T.task_id,
-            T.created_at
+            B.build_id,
+            B.created_at
                 INTO 
-                    task_id,
+                    build_id,
                     created_at
-        FROM postgres_ci.tasks AS T
-        WHERE T.status = 'pending' 
+        FROM postgres_ci.builds AS B
+        WHERE B.status = 'pending' 
         LIMIT 1
         FOR UPDATE SKIP LOCKED;
 
@@ -22,7 +22,7 @@ create or replace function task.get(
             RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
         END IF;
 
-        UPDATE postgres_ci.tasks SET status = 'accepted' WHERE tasks.task_id = get.task_id;
+        UPDATE postgres_ci.builds AS B SET status = 'accepted' WHERE B.build_id = "fetch".build_id;
 
     end;
 $$ language plpgsql security definer;

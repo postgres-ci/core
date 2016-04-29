@@ -1,9 +1,12 @@
-create or replace function task.accept(
-    _task_id int
+create or replace function build.accept(
+    _build_id int
 ) returns void as $$
     begin 
 
-        UPDATE postgres_ci.tasks SET status = 'accepted' WHERE status = 'pending' AND task_id = _task_id;
+        UPDATE postgres_ci.builds 
+            SET status = 'accepted' 
+        WHERE status   = 'pending' 
+        AND   build_id = _build_id;
 
         IF NOT FOUND THEN 
         

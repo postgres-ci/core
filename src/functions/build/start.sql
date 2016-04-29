@@ -1,6 +1,5 @@
 create or replace function build.start(
-    _task_id            int,
-    out build_id       int,
+    _build_id          int,
     out repository_url text,
     out branch         text,
     out revision       text
@@ -8,25 +7,13 @@ create or replace function build.start(
     declare 
         _commit_id  int;
         _project_id int;
-    begin 
+    begin
 
-        SELECT commit_id INTO _commit_id FROM postgres_ci.tasks WHERE task_id = _task_id;
-
-        INSERT INTO postgres_ci.builds (
-            commit_id,
-            config,
-            status
-        ) VALUES (
-            _commit_id,
-            '',
-            'running'
-        ) RETURNING builds.build_id INTO build_id;
-
-        UPDATE postgres_ci.tasks 
+        UPDATE postgres_ci.builds AS B
             SET 
-                status   = 'running',
-                build_id = start.build_id 
-        WHERE task_id = _task_id;
+                status = 'running'
+        WHERE B.build_id = _build_id 
+        RETURNING B.commit_id INTO _commit_id;
 
         SELECT 
             P.project_id,
@@ -43,6 +30,6 @@ create or replace function build.start(
         JOIN postgres_ci.commits  AS C ON C.branch_id = B.branch_id
         WHERE C.commit_id = _commit_id;
 
-        UPDATE postgres_ci.projects SET last_build_id = start.build_id  WHERE project_id = _project_id;
+        UPDATE postgres_ci.projects SET last_build_id = _build_id  WHERE project_id = _project_id;
     end;
 $$ language plpgsql security definer;

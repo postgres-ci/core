@@ -91,11 +91,15 @@ create table postgres_ci.builds(
     config      text      not null,
     status      postgres_ci.status not null,
     error       text not null default '',
+    created_at  timestamptz not null default current_timestamp,
     started_at  timestamptz not null default current_timestamp,
     finished_at timestamptz
 );
 
+create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
+
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
+
 
 create table postgres_ci.parts(
     part_id             serial  primary key,
@@ -120,29 +124,14 @@ create table postgres_ci.tests(
 
 create index idx_part_tests on postgres_ci.tests(part_id);
 
-create unlogged table postgres_ci.tasks(
-    task_id    serial      primary key,
-    commit_id  int         not null references postgres_ci.commits(commit_id),
-    build_id   int         references postgres_ci.builds(build_id),
-    status     postgres_ci.status not null default 'pending',
-    created_at timestamptz not null default current_timestamp,
-    updated_at timestamptz not null default current_timestamp
-);
-
-create index idx_task_status on postgres_ci.tasks(status) where status in ('pending', 'accepted');
-create index idx_task_build  on postgres_ci.tasks(build_id) where build_id is not null;
-
-
-
-
-
 
 /*
 
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
 select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
 
-SELECT * FROM project.add_commit(1, 'master', 'sha', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
+SELECT * FROM project.add_commit(1, 'master', 'd75b51ac78fb2ff19a2f0a6e24274da6e49301e1', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
-select task.new(1);
+select build.new(1);
 */
+
