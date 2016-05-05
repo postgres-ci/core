@@ -87,6 +87,8 @@ create table postgres_ci.commits(
 
 create table postgres_ci.builds(
     build_id    serial    primary key,
+    project_id  int       not null references postgres_ci.projects(project_id),
+    branch_id   int       not null references postgres_ci.branches(branch_id),
     commit_id   int       not null references postgres_ci.commits(commit_id),
     config      text      not null,
     status      postgres_ci.status not null,
@@ -97,8 +99,16 @@ create table postgres_ci.builds(
 );
 
 create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
+create index idx_p_b_build on postgres_ci.builds(project_id, branch_id);
 
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
+
+create table postgres_ci.builds_counters(
+    project_id  int    not null references postgres_ci.projects(project_id),
+    branch_id   int    not null references postgres_ci.branches(branch_id),
+    counter     bigint not null,
+    constraint unique_builds_counters unique(project_id, branch_id)
+);
 
 
 create table postgres_ci.parts(
@@ -130,8 +140,8 @@ create index idx_part_tests on postgres_ci.tests(part_id);
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
 select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
 
-SELECT * FROM project.add_commit(1, 'master', 'd75b51ac78fb2ff19a2f0a6e24274da6e49301e1', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
+SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
-select build.new(1);
+select build.new(1,1,1);
 */
 

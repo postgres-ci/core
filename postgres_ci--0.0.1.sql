@@ -101,6 +101,8 @@ create table postgres_ci.commits(
 
 create table postgres_ci.builds(
     build_id    serial    primary key,
+    project_id  int       not null references postgres_ci.projects(project_id),
+    branch_id   int       not null references postgres_ci.branches(branch_id),
     commit_id   int       not null references postgres_ci.commits(commit_id),
     config      text      not null,
     status      postgres_ci.status not null,
@@ -111,8 +113,16 @@ create table postgres_ci.builds(
 );
 
 create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
+create index idx_p_b_build on postgres_ci.builds(project_id, branch_id);
 
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
+
+create table postgres_ci.builds_counters(
+    project_id  int    not null references postgres_ci.projects(project_id),
+    branch_id   int    not null references postgres_ci.branches(branch_id),
+    counter     bigint not null,
+    constraint unique_builds_counters unique(project_id, branch_id)
+);
 
 
 create table postgres_ci.parts(
@@ -144,9 +154,9 @@ create index idx_part_tests on postgres_ci.tests(part_id);
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
 select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
 
-SELECT * FROM project.add_commit(1, 'master', '6761e23d03d6578dd197812801f0086e38558ddf', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
+SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
-select build.new(1);
+select build.new(1,1,1);
 */
 
 
@@ -395,23 +405,86 @@ create or replace function build.fetch(
     end;
 $$ language plpgsql security definer;
 
+/* source file: src/functions/build/list.sql */
+
+create or replace function build.list(
+    _limit    int,
+    _offset   int,
+    out total bigint,
+    out items jsonb
+) returns record as $$
+    begin 
+
+        SELECT 
+            (
+                SELECT COALESCE(SUM(counter), 0) FROM postgres_ci.builds_counters
+            ),
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(R.*), true), '[]') 
+                FROM (
+                    SELECT 
+                        BD.build_id,
+                        BD.status,
+                        BD.error,
+                        BD.created_at,
+                        BD.started_at,
+                        BD.finished_at,
+                        C.commit_sha,
+                        B.branch,
+                        P.project_name,
+                        P.project_id
+                    FROM postgres_ci.builds   AS BD
+                    JOIN postgres_ci.commits  AS C USING(commit_id) 
+                    JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id 
+                    JOIN postgres_ci.projects AS P ON P.project_id = B.project_id  
+                    ORDER BY build_id DESC
+                    LIMIT  _limit
+                    OFFSET _offset
+                ) AS R
+            )
+        INTO total, items;
+
+    end;
+$$ language plpgsql security definer;
+
+
+
 /* source file: src/functions/build/new.sql */
 
 create or replace function build.new(
+    _project_id int, 
+    _branch_id  int,
     _commit_id  int,
     out build_id int
 ) returns int as $$
     begin 
 
         INSERT INTO postgres_ci.builds (
+            project_id, 
+            branch_id,
             commit_id,
             config,
             status
         ) VALUES (
+            _project_id, 
+            _branch_id,
             _commit_id,
             '',
             'pending'
         ) RETURNING builds.build_id INTO build_id;
+
+        INSERT INTO postgres_ci.builds_counters AS C (
+            project_id, 
+            branch_id,
+            counter
+        ) VALUES (
+            _project_id, 
+            _branch_id,
+            1
+        ) ON CONFLICT 
+            ON CONSTRAINT unique_builds_counters DO UPDATE 
+                SET counter = C.counter + 1;
 
         PERFORM pg_notify('postgres-ci::tasks', (
                 SELECT to_json(T.*) FROM (
@@ -509,7 +582,11 @@ create or replace function project.add_commit(
     _author_email    text,
     out commit_id    int
 ) returns int as $$
+    declare 
+        _branch_id int;
     begin 
+        
+        _branch_id = project.get_branch_id(_project_id, _branch);
 
         INSERT INTO postgres_ci.commits (
             branch_id,
@@ -521,7 +598,7 @@ create or replace function project.add_commit(
             author_name,
             author_email
         ) VALUES (
-            project.get_branch_id(_project_id, _branch),
+            _branch_id,
             _commit_sha,
             _commit_message,
             _committed_at,
@@ -531,7 +608,7 @@ create or replace function project.add_commit(
             _author_email
         ) RETURNING commits.commit_id INTO commit_id;
 
-        PERFORM build.new(commit_id);
+        PERFORM build.new(_project_id, _branch_id, commit_id);
 
     end;
 $$ language plpgsql security definer;
