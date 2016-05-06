@@ -1,5 +1,6 @@
-create or replace function build.list(
+create or replace function build.list_by_branch(
     _project_id int,
+    _branch_id  int,
     _limit      int,
     _offset     int,
     out total   bigint,
@@ -13,6 +14,7 @@ create or replace function build.list(
                     COALESCE(SUM(counter), 0) 
                 FROM postgres_ci.builds_counters
                 WHERE project_id = _project_id
+                AND   branch_id  = _branch_id
             ),
             (
                 SELECT 
@@ -33,6 +35,7 @@ create or replace function build.list(
                     JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id
                     WHERE 
                         BD.project_id = _project_id
+                    AND BD.branch_id  = _branch_id
                     ORDER BY build_id DESC
                     LIMIT  _limit
                     OFFSET _offset
