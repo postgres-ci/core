@@ -739,6 +739,68 @@ create or replace function project.github_name(_repository_url text) returns tex
     end;
 $$ language plpgsql security definer;
 
+/* source file: src/functions/project/list.sql */
+
+create or replace function project.list() returns table (
+    project_id       int,
+    project_name     text,
+    project_token    uuid,
+    project_owner_id int,
+    user_email       text,
+    user_name        text,
+    status           text,
+    error            text,
+    started_at       timestamptz
+) as $$
+    begin
+        return query  
+        SELECT 
+            P.project_id,
+            P.project_name,
+            P.project_token,
+            P.project_owner_id, 
+            U.user_email,
+            U.user_name,
+            COALESCE(B.status::text, 'n/a') AS status,
+            COALESCE(B.error, '')           AS error, 
+            B.started_at 
+        FROM postgres_ci.projects    AS P 
+        JOIN postgres_ci.users       AS U ON U.user_id = P.project_owner_id
+        LEFT JOIN postgres_ci.builds AS B ON B.build_id = P.last_build_id 
+        WHERE P.is_deleted = false
+        ORDER BY P.project_name;
+
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/project/update.sql */
+
+create or replace function project.update(
+    _project_id       int,
+    _project_name     text,
+    _project_owner_id int,
+    _repository_url   text,
+    _github_secret    text
+) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.projects 
+            SET
+                project_name     = _project_name,
+                project_owner_id = _project_owner_id,
+                repository_url   = _repository_url,
+                github_name      = project.github_name(_repository_url),
+                github_secret    = _github_secret
+        WHERE project_id = _project_id;
+
+        IF NOT FOUND THEN 
+            SET log_min_messages to LOG;
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+    end;
+$$ language plpgsql security definer;
+
+
 /* source file: src/functions/hook/commit.sql */
 
 create or replace function hook.commit(
@@ -780,6 +842,54 @@ create or replace function hook.commit(
 
     end;
 $$ language plpgsql security definer;
+
+/* source file: src/functions/hook/push.sql */
+
+create or replace function hook.push(
+    _token   uuid,
+    _branch  text,
+    _commits jsonb
+) returns table (
+    commit_id int
+) as $$
+    declare
+        _project_id int;
+    begin 
+
+        SELECT project_id INTO _project_id FROM postgres_ci.projects WHERE project_token = _token AND is_deleted = false;
+        
+        IF NOT FOUND THEN 
+        
+            SET log_min_messages to LOG;
+
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
+        return query 
+
+            SELECT 
+                project.add_commit(
+                    _project_id,
+                    _branch,
+                    C.commit_sha,
+                    C.commit_message,
+                    C.committed_at,
+                    C.committer_name,
+                    C.committer_email,
+                    C.author_name,
+                    C.author_email
+                ) 
+            FROM jsonb_populate_recordset(null::postgres_ci.commits, _commits) AS C;
+    end;
+$$ language plpgsql security definer;
+
+/*
+
+select 
+* 
+from hook.push('764a340a-7230-4d5e-950e-de0727316e7c', 'master', '[{"commit_sha":"be60d1fbf2f6d18f9963e263ad8284217a8fcded","commit_message":"Test","committed_at":"2016-05-05T17:40:59.431696+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:40:59.431696+03:00"},{"commit_sha":"654fe21cd1874d3028bfbc84e1ff4b6245cfac9b","commit_message":"add list builds fn\n","committed_at":"2016-05-05T17:53:55+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:53:55.860997+03:00"},{"commit_sha":"ac4c4a78e4f0321d273c0502165c98f8b71d2eb0","commit_message":"misc\n","committed_at":"2016-05-06T11:45:03+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-06T11:45:03.421098+03:00"}]');
+
+*/
 
 /* source file: src/functions/users/add.sql */
 
@@ -881,3 +991,65 @@ create or replace function users.delete(_user_id int) returns void as $$
         END IF;
     end;
 $$ language plpgsql security definer;
+
+/* source file: src/functions/users/update.sql */
+
+create or replace function users.update(
+    _user_id      int,
+    _user_name    text,
+    _user_email   text,
+    _is_superuser boolean 
+) returns void as $$
+    declare
+        _message         text;
+        _column_name     text;
+        _constraint_name text;
+        _datatype_name   text;
+        _table_name      text;
+        _schema_name     text;
+    begin 
+
+        BEGIN 
+            UPDATE postgres_ci.users 
+                SET 
+                    user_name    = _user_name,
+                    user_email   = _user_email,
+                    is_superuser = _is_superuser
+            WHERE user_id = _user_id;
+
+        EXCEPTION WHEN OTHERS THEN
+        
+            GET STACKED DIAGNOSTICS 
+                _column_name     = column_name,
+                _constraint_name = constraint_name,
+                _datatype_name   = pg_datatype_name,
+                _table_name      = table_name,
+                _schema_name     = schema_name;
+
+            CASE 
+                WHEN _constraint_name = 'unique_user_email' THEN 
+                    _message = 'EMAIL_ALREADY_EXISTS';
+                WHEN _constraint_name = 'check_user_email' THEN 
+                    _message = 'INVALID_EMAIL';
+                ELSE 
+                    _message = SQLERRM;
+            END CASE;
+
+            IF _message != SQLERRM THEN 
+                SET log_min_messages to LOG;
+            END IF;
+
+            RAISE EXCEPTION USING 
+                MESSAGE    = _message,
+                ERRCODE    = SQLSTATE,
+                COLUMN     = _column_name,
+                CONSTRAINT = _constraint_name,
+                DATATYPE   = _datatype_name,
+                TABLE      = _table_name,
+                SCHEMA     = _schema_name;
+        END;
+
+    end;
+$$ language plpgsql security definer;
+
+
