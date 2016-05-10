@@ -748,9 +748,11 @@ create or replace function project.list() returns table (
     project_owner_id int,
     user_email       text,
     user_name        text,
-    status           text,
-    error            text,
-    started_at       timestamptz
+    status           postgres_ci.status,
+    commit_sha       text,
+    last_build_id    int,
+    started_at       timestamptz,
+    finished_at      timestamptz
 ) as $$
     begin
         return query  
@@ -761,12 +763,15 @@ create or replace function project.list() returns table (
             P.project_owner_id, 
             U.user_email,
             U.user_name,
-            COALESCE(B.status::text, 'n/a') AS status,
-            COALESCE(B.error, '')           AS error, 
-            B.started_at 
-        FROM postgres_ci.projects    AS P 
-        JOIN postgres_ci.users       AS U ON U.user_id = P.project_owner_id
-        LEFT JOIN postgres_ci.builds AS B ON B.build_id = P.last_build_id 
+            B.status,
+            C.commit_sha,
+            P.last_build_id,
+            B.started_at,
+            B.finished_at
+        FROM postgres_ci.projects     AS P 
+        JOIN postgres_ci.users        AS U ON U.user_id   = P.project_owner_id
+        LEFT JOIN postgres_ci.builds  AS B ON B.build_id  = P.last_build_id 
+        LEFT JOIN postgres_ci.commits AS C ON C.commit_id = B.commit_id
         WHERE P.is_deleted = false
         ORDER BY P.project_name;
 
