@@ -9,10 +9,11 @@ create or replace function users.test_add() returns void as $$
 
             IF assert.true((SELECT is_superuser FROM postgres_ci.users WHERE user_id = _user_id)) THEN 
 
-                PERFORM assert.equal(
-                    'Elephant Sam',
-                    (SELECT user_name FROM postgres_ci.users WHERE user_id = _user_id)
-                );
+                PERFORM 
+                    assert.equal('login', user_login), 
+                    assert.equal('Elephant Sam', user_name), 
+                    assert.equal('samelephant82@gmail.com', user_email)
+                FROM postgres_ci.users WHERE user_id = _user_id;
 
             END IF;
             
