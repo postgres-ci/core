@@ -13,7 +13,6 @@ set standard_conforming_strings = on;
 /* source file: src/schema.sql */
 
 --create schema postgres_ci;
-grant execute on all functions in schema postgres_ci to public;
 
 create or replace function postgres_ci.sha1(_value text) returns text as $$
     begin 
@@ -168,19 +167,22 @@ create schema hook;
 create schema users;
 create schema build;
 create schema project;
-
+create schema password;
+	
 grant usage on schema auth    to public;
 grant usage on schema hook    to public;
 grant usage on schema users   to public;
 grant usage on schema build   to public;
 grant usage on schema project to public;
+grant usage on schema password to public;
 grant usage on schema postgres_ci to public;
 grant execute on all functions in schema auth    to public;
 grant execute on all functions in schema hook    to public;
 grant execute on all functions in schema users   to public;
 grant execute on all functions in schema build   to public;
 grant execute on all functions in schema project to public;
-
+grant execute on all functions in schema password to public;
+grant execute on all functions in schema postgres_ci to public;
 
 /* source file: src/functions/auth/get_user.sql */
 
@@ -644,27 +646,38 @@ create or replace function project.add_commit(
         
         _branch_id = project.get_branch_id(_project_id, _branch);
 
-        INSERT INTO postgres_ci.commits (
-            branch_id,
-            commit_sha,
-            commit_message,
-            committed_at,
-            committer_name,
-            committer_email,
-            author_name,
-            author_email
-        ) VALUES (
-            _branch_id,
-            _commit_sha,
-            _commit_message,
-            _committed_at,
-            _committer_name,
-            _committer_email,
-            _author_name,
-            _author_email
-        ) RETURNING commits.commit_id INTO commit_id;
+        BEGIN 
+        
+            INSERT INTO postgres_ci.commits (
+                branch_id,
+                commit_sha,
+                commit_message,
+                committed_at,
+                committer_name,
+                committer_email,
+                author_name,
+                author_email
+            ) VALUES (
+                _branch_id,
+                _commit_sha,
+                _commit_message,
+                _committed_at,
+                _committer_name,
+                _committer_email,
+                _author_name,
+                _author_email
+            ) RETURNING commits.commit_id INTO commit_id;
 
-        PERFORM build.new(_project_id, _branch_id, commit_id);
+            PERFORM build.new(_project_id, _branch_id, commit_id);
+
+        EXCEPTION WHEN unique_violation THEN
+
+            SELECT 
+                C.commit_id INTO commit_id 
+            FROM postgres_ci.commits
+            WHERE branch_id = _branch_id 
+            AND  commit_sha = _commit_sha;
+        END;
 
     end;
 $$ language plpgsql security definer;

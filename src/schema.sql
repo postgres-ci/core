@@ -1,5 +1,4 @@
 --create schema postgres_ci;
-grant execute on all functions in schema postgres_ci to public;
 
 create or replace function postgres_ci.sha1(_value text) returns text as $$
     begin 

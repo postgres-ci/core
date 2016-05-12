@@ -16,27 +16,38 @@ create or replace function project.add_commit(
         
         _branch_id = project.get_branch_id(_project_id, _branch);
 
-        INSERT INTO postgres_ci.commits (
-            branch_id,
-            commit_sha,
-            commit_message,
-            committed_at,
-            committer_name,
-            committer_email,
-            author_name,
-            author_email
-        ) VALUES (
-            _branch_id,
-            _commit_sha,
-            _commit_message,
-            _committed_at,
-            _committer_name,
-            _committer_email,
-            _author_name,
-            _author_email
-        ) RETURNING commits.commit_id INTO commit_id;
+        BEGIN 
+        
+            INSERT INTO postgres_ci.commits (
+                branch_id,
+                commit_sha,
+                commit_message,
+                committed_at,
+                committer_name,
+                committer_email,
+                author_name,
+                author_email
+            ) VALUES (
+                _branch_id,
+                _commit_sha,
+                _commit_message,
+                _committed_at,
+                _committer_name,
+                _committer_email,
+                _author_name,
+                _author_email
+            ) RETURNING commits.commit_id INTO commit_id;
 
-        PERFORM build.new(_project_id, _branch_id, commit_id);
+            PERFORM build.new(_project_id, _branch_id, commit_id);
+
+        EXCEPTION WHEN unique_violation THEN
+
+            SELECT 
+                C.commit_id INTO commit_id 
+            FROM postgres_ci.commits
+            WHERE branch_id = _branch_id 
+            AND  commit_sha = _commit_sha;
+        END;
 
     end;
 $$ language plpgsql security definer;

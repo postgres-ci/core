@@ -3,15 +3,19 @@ create schema hook;
 create schema users;
 create schema build;
 create schema project;
-
+create schema password;
+	
 grant usage on schema auth    to public;
 grant usage on schema hook    to public;
 grant usage on schema users   to public;
 grant usage on schema build   to public;
 grant usage on schema project to public;
+grant usage on schema password to public;
 grant usage on schema postgres_ci to public;
 grant execute on all functions in schema auth    to public;
 grant execute on all functions in schema hook    to public;
 grant execute on all functions in schema users   to public;
 grant execute on all functions in schema build   to public;
 grant execute on all functions in schema project to public;
+grant execute on all functions in schema password to public;
+grant execute on all functions in schema postgres_ci to public;
