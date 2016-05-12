@@ -20,6 +20,7 @@ src/functions/auth/*.sql
 src/functions/build/*.sql
 src/functions/project/*.sql
 src/functions/hook/*.sql
+src/functions/password/*.sql
 src/functions/users/*.sql"
 
 for file in $FILES
