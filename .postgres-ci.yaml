@@ -1,6 +1,7 @@
 images:
-  - postgres:9.5.1
-  - postgres:9.5.2
+  - postgres:9.5
+  - postgresci/postgres96-test
+
 commands:
   - "echo 'Dogfooding :)'"
   - "bash test_suite_setup_script.sh"
