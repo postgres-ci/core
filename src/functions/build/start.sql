@@ -11,7 +11,8 @@ create or replace function build.start(
 
         UPDATE postgres_ci.builds AS B
             SET 
-                status = 'running'
+                status     = 'running',
+                started_at = current_timestamp
         WHERE B.build_id = _build_id 
         RETURNING B.commit_id INTO _commit_id;
 
