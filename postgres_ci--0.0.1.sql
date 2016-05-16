@@ -107,7 +107,7 @@ create table postgres_ci.builds(
     status      postgres_ci.status not null,
     error       text not null default '',
     created_at  timestamptz not null default current_timestamp,
-    started_at  timestamptz not null default current_timestamp,
+    started_at  timestamptz,
     finished_at timestamptz
 );
 
@@ -152,6 +152,7 @@ create index idx_part_tests on postgres_ci.tests(part_id);
 
 select * from users.add('user', 'password', 'User', 'email@email.com', false);
 select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
+select * from project.add('Postgres-CI Core (github)', 1, '/https://github.com/postgres-ci/core', '');
 
 SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
@@ -412,10 +413,11 @@ $$ language plpgsql security definer;
 create or replace function build.list_by_branch(
     _project_id int,
     _branch_id  int,
-    _limit      int,
-    _offset     int,
-    out total   bigint,
-    out items   jsonb
+    _limit       int,
+    _offset      int,
+    out total    bigint,
+    out branches jsonb,
+    out items    jsonb
 ) returns record as $$
     begin 
 
@@ -429,7 +431,20 @@ create or replace function build.list_by_branch(
             ),
             (
                 SELECT 
-                    COALESCE(array_to_json(array_agg(R.*), true), '[]') 
+                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
+                FROM (
+                    SELECT 
+                        branch_id,
+                        branch
+                    FROM postgres_ci.branches 
+                    WHERE 
+                        project_id = _project_id
+                    ORDER BY branch
+                ) AS R
+            ),
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
                 FROM (
                     SELECT 
                         BD.build_id,
@@ -440,7 +455,9 @@ create or replace function build.list_by_branch(
                         BD.started_at,
                         BD.finished_at,
                         C.commit_sha,
-                        B.branch
+                        C.commit_message,
+                        B.branch,
+                        B.branch_id
                     FROM postgres_ci.builds   AS BD
                     JOIN postgres_ci.commits  AS C USING(commit_id) 
                     JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id
@@ -452,21 +469,21 @@ create or replace function build.list_by_branch(
                     OFFSET _offset
                 ) AS R
             )
-        INTO total, items;
+        INTO total, branches, items;
 
     end;
 $$ language plpgsql security definer;
 
 
-
 /* source file: src/functions/build/list.sql */
 
 create or replace function build.list(
-    _project_id int,
-    _limit      int,
-    _offset     int,
-    out total   bigint,
-    out items   jsonb
+    _project_id  int,
+    _limit       int,
+    _offset      int,
+    out total    bigint,
+    out branches jsonb,
+    out items    jsonb
 ) returns record as $$
     begin 
 
@@ -479,7 +496,20 @@ create or replace function build.list(
             ),
             (
                 SELECT 
-                    COALESCE(array_to_json(array_agg(R.*), true), '[]') 
+                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
+                FROM (
+                    SELECT 
+                        branch_id,
+                        branch
+                    FROM postgres_ci.branches 
+                    WHERE 
+                        project_id = _project_id
+                    ORDER BY branch
+                ) AS R
+            ),
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
                 FROM (
                     SELECT 
                         BD.build_id,
@@ -490,7 +520,9 @@ create or replace function build.list(
                         BD.started_at,
                         BD.finished_at,
                         C.commit_sha,
-                        B.branch
+                        C.commit_message,
+                        B.branch,
+                        B.branch_id
                     FROM postgres_ci.builds   AS BD
                     JOIN postgres_ci.commits  AS C USING(commit_id) 
                     JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id
@@ -501,7 +533,7 @@ create or replace function build.list(
                     OFFSET _offset
                 ) AS R
             )
-        INTO total, items;
+        INTO total, branches, items;
 
     end;
 $$ language plpgsql security definer;
@@ -571,7 +603,8 @@ create or replace function build.start(
 
         UPDATE postgres_ci.builds AS B
             SET 
-                status = 'running'
+                status     = 'running',
+                started_at = current_timestamp
         WHERE B.build_id = _build_id 
         RETURNING B.commit_id INTO _commit_id;
 
@@ -624,6 +657,108 @@ create or replace function build.stop(_build_id int, _config text, _error text) 
 
     end;
 $$ language plpgsql security definer;
+
+
+/* source file: src/functions/build/view.sql */
+
+create or replace function build.view(
+    _build_id int, 
+
+    out project_id      int,
+    out project_name    text,
+    out branch_id       int,
+    out branch_name     text,
+    out config          text, 
+    out error           text,
+    out status          postgres_ci.status,
+    out commit_sha      text,
+    out commit_message  text,
+    out committed_at    timestamptz,
+    out committer_name  text,
+    out committer_email text,
+    out author_name     text,
+    out author_email    text,
+    out parts           jsonb
+) returns record as $$
+    begin 
+
+        SELECT
+            B.project_id,
+            P.project_name, 
+            B.branch_id, 
+            BR.branch,
+            B.config,
+            B.error,
+            B.status,
+            C.commit_sha,
+            C.commit_message,
+            C.committed_at,
+            C.committer_name,
+            C.committer_email,
+            C.author_name,
+            C.author_email,
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(P.*)), '[]') 
+                FROM (
+                    SELECT 
+                        part_id,
+                        docker_image,
+                        server_version,
+                        output,
+                        success,
+                        started_at,
+                        finished_at,
+                        (
+                            SELECT 
+                                COALESCE(array_to_json(array_agg(T.*)), '[]') 
+                            FROM (
+                                SELECT 
+                                    namespace,
+                                    procedure,
+                                    errors,
+                                    started_at,
+                                    finished_at
+                                FROM postgres_ci.tests 
+                                WHERE part_id = parts.part_id
+                                ORDER BY started_at
+                            ) AS T
+                        ) AS tests
+                    FROM postgres_ci.parts 
+                    WHERE build_id = B.build_id
+                    ORDER BY part_id
+                ) AS P 
+            )
+            INTO 
+                project_id,
+                project_name,
+                branch_id,
+                branch_name,
+                config, 
+                error,
+                status,
+                commit_sha,
+                commit_message,
+                committed_at,
+                committer_name,
+                committer_email,
+                author_name,
+                author_email,
+                parts
+        FROM postgres_ci.builds AS B 
+            JOIN postgres_ci.projects AS P USING(project_id)
+            JOIN postgres_ci.branches AS BR ON BR.branch_id = B.branch_id
+            JOIN postgres_ci.commits  AS C  ON C.commit_id  = B.commit_id
+        WHERE B.build_id = _build_id;
+
+        IF NOT FOUND THEN 
+            SET log_min_messages to LOG;
+
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+    end;
+$$ language plpgsql security definer;
+
 
 
 /* source file: src/functions/project/add_commit.sql */
@@ -905,7 +1040,7 @@ $$ language plpgsql security definer;
 
 select 
 * 
-from hook.push('764a340a-7230-4d5e-950e-de0727316e7c', 'master', '[{"commit_sha":"be60d1fbf2f6d18f9963e263ad8284217a8fcded","commit_message":"Test","committed_at":"2016-05-05T17:40:59.431696+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:40:59.431696+03:00"},{"commit_sha":"654fe21cd1874d3028bfbc84e1ff4b6245cfac9b","commit_message":"add list builds fn\n","committed_at":"2016-05-05T17:53:55+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:53:55.860997+03:00"},{"commit_sha":"ac4c4a78e4f0321d273c0502165c98f8b71d2eb0","commit_message":"misc\n","committed_at":"2016-05-06T11:45:03+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-06T11:45:03.421098+03:00"}]');
+from hook.push('d9a21e59-926d-4083-89b0-463650476eb8', 'master', '[{"commit_sha":"fa7e3d5fc6b69309e2e8eb9e2af82da3cd96f383","commit_message":"Test","committed_at":"2016-05-05T17:40:59.431696+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:40:59.431696+03:00"},{"commit_sha":"654fe21cd1874d3028bfbc84e1ff4b6245cfac9b","commit_message":"add list builds fn\n","committed_at":"2016-05-05T17:53:55+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:53:55.860997+03:00"},{"commit_sha":"ac4c4a78e4f0321d273c0502165c98f8b71d2eb0","commit_message":"misc\n","committed_at":"2016-05-06T11:45:03+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-06T11:45:03.421098+03:00"}]');
 
 */
 
