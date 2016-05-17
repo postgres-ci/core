@@ -809,9 +809,9 @@ create or replace function project.add_commit(
 
             SELECT 
                 C.commit_id INTO commit_id 
-            FROM postgres_ci.commits
-            WHERE branch_id = _branch_id 
-            AND  commit_sha = _commit_sha;
+            FROM postgres_ci.commits C
+            WHERE C.branch_id = _branch_id 
+            AND  C.commit_sha = _commit_sha;
         END;
 
     end;
