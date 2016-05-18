@@ -38,6 +38,7 @@ create table postgres_ci.users (
 
 create unique index unique_user_login on postgres_ci.users (lower(user_login));
 create unique index unique_user_email on postgres_ci.users (lower(user_email));
+create index        find_user         on postgres_ci.users using gin(lower(user_name || user_login || user_email) gin_trgm_ops);
 
 create unlogged table postgres_ci.sessions(
     session_id text        not null default    postgres_ci.sha1(gen_salt('md5') || gen_salt('md5')) primary key,
@@ -157,6 +158,11 @@ select * from project.add('Postgres-CI Core (github)', 1, '/https://github.com/p
 SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
 
 select build.new(1,1,1);
+
+insert into postgres_ci.users (user_name, user_login, user_email, hash, salt)
+    select 'user_name' || g, 'user_login' || g, 'user@email' || g, 'af80e91bde00a80b2c4a98e48b8716a6c06ab391', 'af80e91bde00a80b2c4a98e48b8716a6c06ab391' 
+        from generate_series(1, 1000000) g;
+
 */
 
 
@@ -408,77 +414,11 @@ create or replace function build.fetch(
     end;
 $$ language plpgsql security definer;
 
-/* source file: src/functions/build/list_by_branch.sql */
-
-create or replace function build.list_by_branch(
-    _project_id int,
-    _branch_id  int,
-    _limit       int,
-    _offset      int,
-    out total    bigint,
-    out branches jsonb,
-    out items    jsonb
-) returns record as $$
-    begin 
-
-        SELECT 
-            (
-                SELECT 
-                    COALESCE(SUM(counter), 0) 
-                FROM postgres_ci.builds_counters
-                WHERE project_id = _project_id
-                AND   branch_id  = _branch_id
-            ),
-            (
-                SELECT 
-                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
-                FROM (
-                    SELECT 
-                        branch_id,
-                        branch
-                    FROM postgres_ci.branches 
-                    WHERE 
-                        project_id = _project_id
-                    ORDER BY branch
-                ) AS R
-            ),
-            (
-                SELECT 
-                    COALESCE(array_to_json(array_agg(R.*)), '[]') 
-                FROM (
-                    SELECT 
-                        BD.build_id,
-                        BD.project_id,
-                        BD.status,
-                        BD.error,
-                        BD.created_at,
-                        BD.started_at,
-                        BD.finished_at,
-                        C.commit_sha,
-                        C.commit_message,
-                        B.branch,
-                        B.branch_id
-                    FROM postgres_ci.builds   AS BD
-                    JOIN postgres_ci.commits  AS C USING(commit_id) 
-                    JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id
-                    WHERE 
-                        BD.project_id = _project_id
-                    AND BD.branch_id  = _branch_id
-                    ORDER BY build_id DESC
-                    LIMIT  _limit
-                    OFFSET _offset
-                ) AS R
-            )
-        INTO total, branches, items;
-
-    end;
-$$ language plpgsql security definer;
-
-
 /* source file: src/functions/build/list.sql */
 
 create or replace function build.list(
     _project_id  int,
+    _branch_id   int,
     _limit       int,
     _offset      int,
     out total    bigint,
@@ -493,6 +433,12 @@ create or replace function build.list(
                     COALESCE(SUM(counter), 0) 
                 FROM postgres_ci.builds_counters
                 WHERE project_id = _project_id
+                AND (
+                    CASE WHEN _branch_id <> 0 
+                        THEN branch_id  = _branch_id
+                        ELSE true 
+                    END
+                )
             ),
             (
                 SELECT 
@@ -528,6 +474,12 @@ create or replace function build.list(
                     JOIN postgres_ci.branches AS B ON B.branch_id  = C.branch_id
                     WHERE 
                         BD.project_id = _project_id
+                    AND (
+                        CASE WHEN _branch_id <> 0 
+                            THEN BD.branch_id  = _branch_id
+                            ELSE true
+                        END
+                    )
                     ORDER BY build_id DESC
                     LIMIT  _limit
                     OFFSET _offset
@@ -1176,6 +1128,66 @@ create or replace function users.delete(_user_id int) returns void as $$
 
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/users/list.sql */
+
+create or replace function users.list(
+    _limit  int,
+    _offset int,
+    _query  text,
+
+    out total bigint,
+    out users jsonb
+) returns record as $$ 
+    declare
+        _pattern text;
+    begin 
+
+        IF _query <> '' THEN 
+            _pattern = '%' || array_to_string(string_to_array(lower(_query), ' '), '%') || '%';
+        END IF;
+
+        SELECT 
+            (
+                SELECT 
+                    COUNT(*) 
+                FROM postgres_ci.users
+                WHERE is_deleted = false
+                AND (
+                    CASE WHEN _pattern IS NOT NULL 
+                        THEN lower(user_name || user_login || user_email) LIKE _pattern
+                        ELSE true
+                    END
+                )
+            ),
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(U.*)), '[]') 
+                FROM (
+                    SELECT 
+                        user_id,
+                        user_name,
+                        user_login,
+                        user_email,
+                        is_superuser,
+                        created_at,
+                        updated_at
+                    FROM postgres_ci.users
+                    WHERE is_deleted = false
+                    AND (
+                        CASE WHEN _pattern IS NOT NULL 
+                            THEN lower(user_name || user_login || user_email) LIKE _pattern
+                            ELSE true
+                        END
+                    )
+                    ORDER BY user_id 
+                    LIMIT  _limit
+                    OFFSET _offset
+                ) U
+            )
+        INTO total, users;
     end;
 $$ language plpgsql security definer;
 
