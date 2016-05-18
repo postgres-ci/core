@@ -11,6 +11,7 @@
 \i users/test_update.sql
 \i users/test_delete.sql
 \i password/test_check.sql
+\i password/test_change.sql
 \i postgres_ci/test_sha1.sql
 
 
@@ -32,6 +33,7 @@ begin
         ('users',       'test_update'),
         ('users',       'test_delete'),
         ('password',    'test_check'),
+        ('password',    'test_change'),
         ('postgres_ci', 'test_sha1')
     LOOP 
         PERFORM assert.add_test(namespace, procedure);

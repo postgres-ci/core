@@ -17,8 +17,13 @@ WITH coverage AS (
 )
 SELECT func, covered FROM coverage
 UNION ALL (
-    SELECT 'Coverage: ', ((
-        (SELECT COUNT(*) FROM coverage WHERE covered = '+')::numeric / 
-        (SELECT COUNT(*) FROM coverage)::numeric
-    ) * 100)::int || '% of functions'
+    SELECT 'Coverage: ', (
+        SELECT 
+            (
+                (
+                    (COUNT(*) FILTER (WHERE covered = '+'))::numeric / COUNT(*)::numeric
+                ) * 100
+            )::int
+        FROM coverage
+    )::text || '% of functions'
 );
