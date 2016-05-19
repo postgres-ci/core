@@ -374,31 +374,36 @@ $$ language plpgsql security definer;
 
 /* source file: src/functions/build/fetch.sql */
 
-create or replace function build.fetch(
-    out build_id   int,
-    out created_at timestamptz
-) returns record as $$
+create or replace function build.fetch() returns table (
+    build_id   int,
+    created_at timestamptz
+) as $$
+    declare 
+        _build_id   int;
+        _created_at timestamptz;
     begin 
 
         SELECT 
             B.build_id,
             B.created_at
                 INTO 
-                    build_id,
-                    created_at
+                    _build_id,
+                    _created_at
         FROM postgres_ci.builds AS B
         WHERE B.status = 'pending' 
         LIMIT 1
         FOR UPDATE SKIP LOCKED;
 
-        IF NOT FOUND THEN -- @todo: don't use exception this
-            RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
+        IF NOT FOUND THEN
+            return;
         END IF;
 
-        UPDATE postgres_ci.builds AS B SET status = 'accepted' WHERE B.build_id = "fetch".build_id;
+        UPDATE postgres_ci.builds AS B SET status = 'accepted' WHERE B.build_id = _build_id;
 
+        return query 
+            SELECT _build_id, _created_at;
     end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer rows 1;
 
 /* source file: src/functions/build/list.sql */
 
