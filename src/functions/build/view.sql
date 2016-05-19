@@ -40,8 +40,8 @@ create or replace function build.view(
                 FROM (
                     SELECT 
                         part_id,
-                        docker_image,
-                        server_version,
+                        image,
+                        version,
                         output,
                         success,
                         started_at,
@@ -51,14 +51,12 @@ create or replace function build.view(
                                 COALESCE(array_to_json(array_agg(T.*)), '[]') 
                             FROM (
                                 SELECT 
-                                    namespace,
-                                    procedure,
+                                    function,
                                     errors,
-                                    started_at,
-                                    finished_at
+                                    duration
                                 FROM postgres_ci.tests 
                                 WHERE part_id = parts.part_id
-                                ORDER BY started_at
+                                ORDER BY jsonb_array_length(errors), function
                             ) AS T
                         ) AS tests
                     FROM postgres_ci.parts 

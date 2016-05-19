@@ -1,12 +1,12 @@
 create or replace function build.add_part(
-    _build_id       int,
-    _server_version text,
-    _docker_image   text,
-    _docker_container_id text,
-    _output         text,
-    _started_at     timestamptz,
-    _tests          jsonb,
-    out part_id     int
+    _build_id     int,
+    _version      text,
+    _image        text,
+    _container_id text,
+    _output       text,
+    _started_at   timestamptz,
+    _tests        jsonb,
+    out part_id   int
 ) returns int as $$
     declare 
         _test postgres_ci.tests;
@@ -14,18 +14,18 @@ create or replace function build.add_part(
 
         INSERT INTO postgres_ci.parts (
             build_id,
-            server_version,
-            docker_image,
-            docker_container_id,
+            version,
+            image,
+            container_id,
             output,
             success,
             started_at,
             finished_at
         ) VALUES (
             _build_id,
-            _server_version,
-            _docker_image,
-            _docker_container_id,
+            _version,
+            _image,
+            _container_id,
             _output,
             true,
             _started_at,
@@ -34,19 +34,15 @@ create or replace function build.add_part(
 
         INSERT INTO postgres_ci.tests (
             part_id,
-            namespace,
-            procedure,
+            function,
             errors,
-            started_at,
-            finished_at
+            duration
         )
         SELECT 
             add_part.part_id, 
-            E.namespace, 
-            E.procedure,
+            E.function,
             E.errors, 
-            E.started_at, 
-            E.finished_at 
+            E.duration 
         FROM jsonb_populate_recordset(null::postgres_ci.tests, _tests) AS E;
 
         IF EXISTS(

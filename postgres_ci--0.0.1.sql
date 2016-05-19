@@ -20,8 +20,9 @@ create or replace function postgres_ci.sha1(_value text) returns text as $$
     end;
 $$ language plpgsql;
 
+create sequence postgres_ci.users_seq;
 create table postgres_ci.users (
-    user_id      serial      primary key,
+    user_id      int         not null default nextval('postgres_ci.users_seq') primary key,
     user_name    text        not null,
     user_login   text        not null,
     user_email   text        not null,
@@ -56,8 +57,10 @@ create type postgres_ci.status as enum(
     'success'
 );
 
+create sequence postgres_ci.projects_seq;
+
 create table postgres_ci.projects(
-    project_id       serial  primary key,
+    project_id       int     not null default nextval('postgres_ci.projects_seq') primary key,
     project_name     text    not null,
     project_token    uuid    not null default gen_random_uuid(),  
     project_owner_id int     not null,    
@@ -74,9 +77,10 @@ create table postgres_ci.projects(
 create unique index udx_is_github_repo on postgres_ci.projects (github_name) where github_name <> '';
 alter table postgres_ci.projects add constraint fk_project_owner_id foreign key  (project_owner_id) references postgres_ci.users(user_id);
 
+create sequence postgres_ci.branches_seq;
 
 create table postgres_ci.branches(
-    branch_id  serial primary key,
+    branch_id  int    not null default nextval('postgres_ci.branches_seq') primary key,
     branch     text   not null,
     project_id int    not null references postgres_ci.projects(project_id),
     created_at timestamptz not null default current_timestamp
@@ -84,8 +88,10 @@ create table postgres_ci.branches(
 
 create index idx_branch_project on postgres_ci.branches (project_id);
 
+create sequence postgres_ci.commits_seq;
+
 create table postgres_ci.commits(
-    commit_id       serial      primary key,
+    commit_id       int         not null default nextval('postgres_ci.commits_seq') primary key,
     branch_id       int         not null references postgres_ci.branches(branch_id),
     commit_sha      text        not null,
     commit_message  text        not null,
@@ -99,8 +105,10 @@ create table postgres_ci.commits(
     constraint uniq_commit unique(branch_id, commit_sha)
 );
 
+create sequence postgres_ci.builds_seq;
+
 create table postgres_ci.builds(
-    build_id    serial    primary key,
+    build_id    int       not null default nextval('postgres_ci.builds_seq') primary key,
     project_id  int       not null references postgres_ci.projects(project_id),
     branch_id   int       not null references postgres_ci.branches(branch_id),
     commit_id   int       not null references postgres_ci.commits(commit_id),
@@ -124,26 +132,25 @@ create table postgres_ci.builds_counters(
     constraint unique_builds_counters unique(project_id, branch_id)
 );
 
+create sequence postgres_ci.parts_seq;
 
 create table postgres_ci.parts(
-    part_id             serial  primary key,
-    build_id            int     not null references postgres_ci.builds(build_id),
-    docker_image        text    not null,
-    docker_container_id text not null,
-    server_version      text    not null,
-    output              text    not null,
-    success             boolean not null,
-    started_at          timestamptz not null,
-    finished_at         timestamptz not null
+    part_id      int     not null default nextval('postgres_ci.parts_seq') primary key,
+    build_id     int     not null references postgres_ci.builds(build_id),
+    image        text    not null,
+    container_id text    not null,
+    version      text    not null,
+    output       text    not null,
+    success      boolean not null,
+    started_at   timestamptz not null,
+    finished_at  timestamptz not null
 );
 
 create table postgres_ci.tests(
-    part_id     int not null references postgres_ci.parts(part_id),
-    namespace   name   not null,
-    procedure   name   not null,
+    part_id     int   not null references postgres_ci.parts(part_id),
+    function    text  not null,
     errors      jsonb not null default '[]',
-    started_at  timestamptz not null,
-    finished_at timestamptz not null
+    duration    real  not null
 );
 
 create index idx_part_tests on postgres_ci.tests(part_id);
@@ -190,6 +197,22 @@ grant execute on all functions in schema build   to public;
 grant execute on all functions in schema project to public;
 grant execute on all functions in schema password to public;
 grant execute on all functions in schema postgres_ci to public;
+
+/* source file: src/pg_extension_config_dump.sql */
+
+select pg_catalog.pg_extension_config_dump('postgres_ci.users', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.users_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.projects', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.projects_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.branches', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.branches_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.commits', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.commits_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.builds', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.builds_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.parts', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.parts_seq', '');
+
 
 /* source file: src/functions/auth/get_user.sql */
 
@@ -308,14 +331,14 @@ $$ language plpgsql security definer;
 /* source file: src/functions/build/add_part.sql */
 
 create or replace function build.add_part(
-    _build_id       int,
-    _server_version text,
-    _docker_image   text,
-    _docker_container_id text,
-    _output         text,
-    _started_at     timestamptz,
-    _tests          jsonb,
-    out part_id     int
+    _build_id     int,
+    _version      text,
+    _image        text,
+    _container_id text,
+    _output       text,
+    _started_at   timestamptz,
+    _tests        jsonb,
+    out part_id   int
 ) returns int as $$
     declare 
         _test postgres_ci.tests;
@@ -323,18 +346,18 @@ create or replace function build.add_part(
 
         INSERT INTO postgres_ci.parts (
             build_id,
-            server_version,
-            docker_image,
-            docker_container_id,
+            version,
+            image,
+            container_id,
             output,
             success,
             started_at,
             finished_at
         ) VALUES (
             _build_id,
-            _server_version,
-            _docker_image,
-            _docker_container_id,
+            _version,
+            _image,
+            _container_id,
             _output,
             true,
             _started_at,
@@ -343,19 +366,15 @@ create or replace function build.add_part(
 
         INSERT INTO postgres_ci.tests (
             part_id,
-            namespace,
-            procedure,
+            function,
             errors,
-            started_at,
-            finished_at
+            duration
         )
         SELECT 
             add_part.part_id, 
-            E.namespace, 
-            E.procedure,
+            E.function,
             E.errors, 
-            E.started_at, 
-            E.finished_at 
+            E.duration 
         FROM jsonb_populate_recordset(null::postgres_ci.tests, _tests) AS E;
 
         IF EXISTS(
@@ -646,8 +665,8 @@ create or replace function build.view(
                 FROM (
                     SELECT 
                         part_id,
-                        docker_image,
-                        server_version,
+                        image,
+                        version,
                         output,
                         success,
                         started_at,
@@ -657,14 +676,12 @@ create or replace function build.view(
                                 COALESCE(array_to_json(array_agg(T.*)), '[]') 
                             FROM (
                                 SELECT 
-                                    namespace,
-                                    procedure,
+                                    function,
                                     errors,
-                                    started_at,
-                                    finished_at
+                                    duration
                                 FROM postgres_ci.tests 
                                 WHERE part_id = parts.part_id
-                                ORDER BY started_at
+                                ORDER BY jsonb_array_length(errors), function
                             ) AS T
                         ) AS tests
                     FROM postgres_ci.parts 

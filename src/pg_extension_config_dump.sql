@@ -1,0 +1,12 @@
+select pg_catalog.pg_extension_config_dump('postgres_ci.users', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.users_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.projects', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.projects_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.branches', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.branches_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.commits', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.commits_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.builds', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.builds_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.parts', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.parts_seq', '');

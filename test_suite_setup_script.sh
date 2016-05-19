@@ -19,7 +19,7 @@ env PGPASSWORD=password psql -q -v ON_ERROR_STOP=1 -U ci_owner -d $TEST_DATABASE
 	CREATE SCHEMA postgres_ci;
 SQL
 
-cat postgres_ci--0.0.1.sql | sed '/CREATE EXTENSION postgres_ci/d' > dump.sql
+cat postgres_ci--0.0.1.sql | sed '/CREATE EXTENSION postgres_ci/d' | sed '/pg_extension_config_dump/d' > dump.sql
 
 env PGPASSWORD=password psql -q -v ON_ERROR_STOP=1 -U ci_owner -d $TEST_DATABASE -f dump.sql
 

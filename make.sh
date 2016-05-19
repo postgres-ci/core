@@ -16,6 +16,7 @@ set standard_conforming_strings = on;
 
 FILES="src/schema.sql
 src/packages.sql
+src/pg_extension_config_dump.sql
 src/functions/auth/*.sql
 src/functions/build/*.sql
 src/functions/project/*.sql
