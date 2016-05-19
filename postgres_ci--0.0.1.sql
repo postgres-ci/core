@@ -225,9 +225,6 @@ create or replace function auth.get_user(
         AND   S.expires_at > CURRENT_TIMESTAMP;
 
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
 
@@ -263,17 +260,9 @@ create or replace function auth.login(
 
         CASE 
             WHEN NOT FOUND THEN
-
-                SET log_min_messages to LOG;
-
                 RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
-
             WHEN _invalid_password THEN 
-
-                SET log_min_messages to LOG;
-
                 RAISE EXCEPTION 'INVALID_PASSWORD' USING ERRCODE = 'invalid_password';
-                
             ELSE 
                 INSERT INTO postgres_ci.sessions (
                     user_id,
@@ -297,8 +286,9 @@ $$ language plpgsql security definer;
 /* source file: src/functions/build/accept.sql */
 
 create or replace function build.accept(
-    _build_id int
-) returns void as $$
+    _build_id int,
+    out accept boolean
+) returns boolean as $$
     begin 
 
         UPDATE postgres_ci.builds 
@@ -307,12 +297,11 @@ create or replace function build.accept(
         AND   build_id = _build_id;
 
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
-            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+            accept = false;
+            return;
         END IF;
 
+        accept = true;
     end;
 $$ language plpgsql security definer;
 
@@ -402,10 +391,7 @@ create or replace function build.fetch(
         LIMIT 1
         FOR UPDATE SKIP LOCKED;
 
-        IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
+        IF NOT FOUND THEN -- @todo: don't use exception this
             RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
         END IF;
 
@@ -704,8 +690,6 @@ create or replace function build.view(
         WHERE B.build_id = _build_id;
 
         IF NOT FOUND THEN 
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
     end;
@@ -899,7 +883,6 @@ create or replace function project.update(
         WHERE project_id = _project_id;
 
         IF NOT FOUND THEN 
-            SET log_min_messages to LOG;
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
     end;
@@ -927,9 +910,6 @@ create or replace function hook.commit(
         SELECT project_id INTO _project_id FROM postgres_ci.projects WHERE project_token = _token AND is_deleted = false;
         
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
 
@@ -964,9 +944,6 @@ create or replace function hook.push(
         SELECT project_id INTO _project_id FROM postgres_ci.projects WHERE project_token = _token AND is_deleted = false;
         
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
 
@@ -1040,15 +1017,8 @@ create or replace function password.check(_user_id int, _password text) returns 
 
         CASE 
             WHEN NOT FOUND THEN
-
-                SET log_min_messages to LOG;
-
                 RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
-
             WHEN _invalid_password THEN 
-
-                SET log_min_messages to LOG;
-
                 RAISE EXCEPTION 'INVALID_PASSWORD' USING ERRCODE = 'invalid_password';
             ELSE 
                 return true;
@@ -1117,10 +1087,6 @@ create or replace function users.add(
                     _message = SQLERRM;
             END CASE;
 
-            IF _message != SQLERRM THEN 
-                SET log_min_messages to LOG;
-            END IF;
-
             RAISE EXCEPTION USING 
                 MESSAGE    = _message,
                 ERRCODE    = SQLSTATE,
@@ -1150,9 +1116,6 @@ create or replace function users.delete(_user_id int) returns void as $$
         AND is_deleted = false;
 
         IF NOT FOUND THEN 
-            
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
     end;
@@ -1260,10 +1223,6 @@ create or replace function users.update(
                 ELSE 
                     _message = SQLERRM;
             END CASE;
-
-            IF _message != SQLERRM THEN 
-                SET log_min_messages to LOG;
-            END IF;
 
             RAISE EXCEPTION USING 
                 MESSAGE    = _message,

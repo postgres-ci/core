@@ -56,10 +56,6 @@ create or replace function users.add(
                     _message = SQLERRM;
             END CASE;
 
-            IF _message != SQLERRM THEN 
-                SET log_min_messages to LOG;
-            END IF;
-
             RAISE EXCEPTION USING 
                 MESSAGE    = _message,
                 ERRCODE    = SQLSTATE,

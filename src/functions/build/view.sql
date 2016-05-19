@@ -89,8 +89,6 @@ create or replace function build.view(
         WHERE B.build_id = _build_id;
 
         IF NOT FOUND THEN 
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
     end;

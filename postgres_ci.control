@@ -1,6 +1,6 @@
 comment         = 'Postgres-CI'
 default_version = '0.0.1'
-superuser       = true
+superuser       = false
 relocatable     = false
 requires        = 'plpgsql, pgcrypto, pg_trgm'
 schema          = 'postgres_ci'

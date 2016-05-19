@@ -15,10 +15,7 @@ create or replace function build.fetch(
         LIMIT 1
         FOR UPDATE SKIP LOCKED;
 
-        IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
+        IF NOT FOUND THEN -- @todo: don't use exception this
             RAISE EXCEPTION 'NO_NEW_TASKS' USING ERRCODE = 'no_data_found';
         END IF;
 

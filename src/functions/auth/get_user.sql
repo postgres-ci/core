@@ -30,9 +30,6 @@ create or replace function auth.get_user(
         AND   S.expires_at > CURRENT_TIMESTAMP;
 
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
 

@@ -1,6 +1,7 @@
 create or replace function build.accept(
-    _build_id int
-) returns void as $$
+    _build_id int,
+    out accept boolean
+) returns boolean as $$
     begin 
 
         UPDATE postgres_ci.builds 
@@ -9,11 +10,10 @@ create or replace function build.accept(
         AND   build_id = _build_id;
 
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
-            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+            accept = false;
+            return;
         END IF;
 
+        accept = true;
     end;
 $$ language plpgsql security definer;

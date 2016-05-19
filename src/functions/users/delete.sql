@@ -9,9 +9,6 @@ create or replace function users.delete(_user_id int) returns void as $$
         AND is_deleted = false;
 
         IF NOT FOUND THEN 
-            
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
     end;

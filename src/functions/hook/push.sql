@@ -12,9 +12,6 @@ create or replace function hook.push(
         SELECT project_id INTO _project_id FROM postgres_ci.projects WHERE project_token = _token AND is_deleted = false;
         
         IF NOT FOUND THEN 
-        
-            SET log_min_messages to LOG;
-
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
 
