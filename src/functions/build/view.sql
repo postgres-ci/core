@@ -56,7 +56,9 @@ create or replace function build.view(
                                     duration
                                 FROM postgres_ci.tests 
                                 WHERE part_id = parts.part_id
-                                ORDER BY jsonb_array_length(errors), function
+                                ORDER BY 
+                                    jsonb_array_length(errors) DESC, 
+                                    function
                             ) AS T
                         ) AS tests
                     FROM postgres_ci.parts 

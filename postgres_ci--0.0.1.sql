@@ -681,7 +681,9 @@ create or replace function build.view(
                                     duration
                                 FROM postgres_ci.tests 
                                 WHERE part_id = parts.part_id
-                                ORDER BY jsonb_array_length(errors), function
+                                ORDER BY 
+                                    jsonb_array_length(errors) DESC, 
+                                    function
                             ) AS T
                         ) AS tests
                     FROM postgres_ci.parts 
@@ -1129,6 +1131,17 @@ $$ language plpgsql security definer;
 
 create or replace function users.delete(_user_id int) returns void as $$
     begin 
+
+        IF EXISTS(
+            SELECT 
+                null 
+            FROM postgres_ci.users 
+            WHERE is_deleted = false 
+            AND is_superuser = true 
+            AND user_id      = _user_id
+        ) THEN 
+            RAISE EXCEPTION 'IS_SUPERUSER' USING ERRCODE = 'check_violation';
+        END IF;
     
         UPDATE postgres_ci.users 
             SET 
