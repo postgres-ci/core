@@ -22,11 +22,7 @@ create or replace function auth.test_get_user() returns void as $$
 
         END IF;
 
-        PERFORM assert.exception(
-            $sql$ SELECT auth.get_user('no_data_found') $sql$, 
-            exception_message  := 'NOT_FOUND',
-            exception_sqlstate := 'P0002'
-        );
+        PERFORM assert.null((select user_id from auth.get_user('no_data_found')));
 
     end;
 $$ language plpgsql;

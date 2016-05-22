@@ -30,7 +30,7 @@ create index        find_user         on postgres_ci.users using gin(lower(user_
 create unlogged table postgres_ci.sessions(
     session_id text        not null default    postgres_ci.sha1(gen_salt('md5') || gen_salt('md5')) primary key,
     user_id    int         not null references postgres_ci.users(user_id),
-    expires_at timestamptz not null default current_timestamp
+    expires_at timestamptz not null default    current_timestamp
 );
 
 create index idx_sessions_expires_at on postgres_ci.sessions(expires_at);
