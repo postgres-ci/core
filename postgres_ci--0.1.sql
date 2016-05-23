@@ -44,7 +44,7 @@ create index        find_user         on postgres_ci.users using gin(lower(user_
 create unlogged table postgres_ci.sessions(
     session_id text        not null default    postgres_ci.sha1(gen_salt('md5') || gen_salt('md5')) primary key,
     user_id    int         not null references postgres_ci.users(user_id),
-    expires_at timestamptz not null default current_timestamp
+    expires_at timestamptz not null default    current_timestamp
 );
 
 create index idx_sessions_expires_at on postgres_ci.sessions(expires_at);
@@ -214,19 +214,29 @@ select pg_catalog.pg_extension_config_dump('postgres_ci.parts', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.parts_seq', '');
 
 
+/* source file: src/functions/auth/gc.sql */
+
+create or replace function auth.gc() returns void as $$
+    begin 
+        DELETE FROM postgres_ci.sessions WHERE expires_at < CURRENT_TIMESTAMP;
+    end;
+$$ language plpgsql security definer;
+
 /* source file: src/functions/auth/get_user.sql */
 
 create or replace function auth.get_user(
-    _session_id      text,
-    out user_id      int,
-    out user_name    text,
-    out user_login   text,
-    out user_email   text,
-    out is_superuser boolean,
-    out created_at   timestamptz
-) returns record as $$
+    _session_id text
+) returns table(
+    user_id      int,
+    user_name    text,
+    user_login   text,
+    user_email   text,
+    is_superuser boolean,
+    created_at   timestamptz
+) as $$
     begin 
 
+        return query 
         SELECT 
             U.user_id,
             U.user_name,
@@ -234,30 +244,20 @@ create or replace function auth.get_user(
             U.user_email,
             U.is_superuser,
             U.created_at
-                INTO 
-                    user_id,
-                    user_name,
-                    user_login,
-                    user_email,
-                    is_superuser,
-                    created_at
         FROM postgres_ci.users    AS U 
         JOIN postgres_ci.sessions AS S USING(user_id)
         WHERE U.is_deleted = false
         AND   S.session_id = _session_id
         AND   S.expires_at > CURRENT_TIMESTAMP;
 
-        IF NOT FOUND THEN 
-            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        IF FOUND THEN 
+            UPDATE postgres_ci.sessions 
+                SET 
+                    expires_at = CURRENT_TIMESTAMP + '1 hour'::interval 
+            WHERE session_id   = _session_id;
         END IF;
-
-        UPDATE postgres_ci.sessions 
-            SET 
-                expires_at = CURRENT_TIMESTAMP + '1 hour'::interval 
-        WHERE session_id   = _session_id;
-
     end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer rows 1;
 
 /* source file: src/functions/auth/login.sql */
 
@@ -423,6 +423,14 @@ create or replace function build.fetch() returns table (
             SELECT _build_id, _created_at;
     end;
 $$ language plpgsql security definer rows 1;
+
+/* source file: src/functions/build/gc.sql */
+
+create or replace function build.gc() returns void as $$
+	begin 
+
+	end;
+$$ language plpgsql sequrity definer;
 
 /* source file: src/functions/build/list.sql */
 
