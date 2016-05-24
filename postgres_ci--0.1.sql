@@ -430,7 +430,7 @@ create or replace function build.gc() returns void as $$
 	begin 
 
 	end;
-$$ language plpgsql sequrity definer;
+$$ language plpgsql security definer;
 
 /* source file: src/functions/build/list.sql */
 
@@ -815,6 +815,18 @@ create or replace function project.add(
 $$ language plpgsql security definer;
 
 
+/* source file: src/functions/project/delete.sql */
+
+create or replace function project.delete(_project_id int) returns void as $$
+    begin 
+        UPDATE postgres_ci.projects 
+            SET 
+                is_deleted = true,
+                updated_at = current_timestamp 
+        WHERE project_id = _project_id;
+    end;
+$$ language plpgsql security definer;
+
 /* source file: src/functions/project/get_branch_id.sql */
 
 create or replace function project.get_branch_id(_project_id int, _branch text, out branch_id int) returns int as $$
@@ -837,6 +849,65 @@ create or replace function project.get_branch_id(_project_id int, _branch text, 
             ) RETURNING branches.branch_id INTO branch_id; 
             
         END IF;
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/project/get.sql */
+
+create or replace function project.get(
+    _project_id int,
+    out project_id        int,
+    out project_name     text,
+    out project_token    text,
+    out repository_url   text,
+    out project_owner_id int,
+    out possible_owners  jsonb,
+    out github_secret    text,
+    out created_at       timestamptz,
+    out updated_at       timestamptz
+) returns record as $$
+    begin 
+
+        SELECT 
+            P.project_id,
+            P.project_name,
+            P.project_token,
+            P.repository_url,
+            P.project_owner_id,
+            (
+                SELECT 
+                    COALESCE(array_to_json(array_agg(U.*)), '[]') 
+                FROM (
+                    SELECT 
+                        user_id,
+                        user_name
+                    FROM postgres_ci.users
+                    WHERE is_deleted = false
+                    ORDER BY user_id 
+                ) U
+            ),
+            P.github_secret,
+            P.created_at,
+            P.updated_at
+
+            INTO 
+                project_id,
+                project_name,
+                project_token,
+                repository_url,
+                project_owner_id,
+                possible_owners,
+                github_secret,
+                created_at,
+                updated_at
+        FROM postgres_ci.projects AS P
+        WHERE P.project_id = _project_id
+        AND   P.is_deleted = false;
+
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
     end;
 $$ language plpgsql security definer;
 
@@ -1059,6 +1130,21 @@ create or replace function password.check(_user_id int, _password text) returns 
     end;
 $$ language plpgsql security definer;
 
+/* source file: src/functions/password/reset.sql */
+
+create or replace function password.reset(_user_id int, _password text) returns void as $$
+    declare 
+        _salt text;
+    begin 
+        _salt = postgres_ci.sha1(gen_salt('md5') || current_timestamp);
+        UPDATE postgres_ci.users 
+            SET
+                hash  = encode(digest(_salt || _password, 'sha1'), 'hex'),
+                salt  = _salt
+        WHERE user_id = _user_id; 
+    end;
+$$ language plpgsql security definer;
+
 /* source file: src/functions/users/add.sql */
 
 create or replace function users.add(
@@ -1161,6 +1247,46 @@ create or replace function users.delete(_user_id int) returns void as $$
         IF NOT FOUND THEN 
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/users/get.sql */
+
+create or replace function users.get(
+    _user_id int,
+    out user_id      int,
+    out user_name    text,
+    out user_login   text,
+    out user_email   text,
+    out is_superuser boolean,
+    out created_at   timestamptz,
+    out updated_at   timestamptz
+) returns record as $$
+    begin 
+        SELECT 
+            U.user_id,
+            U.user_name,
+            U.user_login,
+            U.user_email,
+            U.is_superuser,
+            U.created_at,
+            U.updated_at    
+            INTO 
+                user_id,
+                user_name,
+                user_login,
+                user_email,
+                is_superuser,
+                created_at,
+                updated_at
+        FROM postgres_ci.users AS U
+        WHERE U.user_id    = _user_id
+        AND   U.is_deleted = false;
+
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
     end;
 $$ language plpgsql security definer;
 
