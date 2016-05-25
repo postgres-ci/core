@@ -1,3 +1,6 @@
+alter extension postgres_ci drop function build.view(int);
+drop function build.view(int);
+
 create or replace function build.view(
     _build_id int, 
 
