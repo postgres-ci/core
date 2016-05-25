@@ -1,6 +1,6 @@
 images:
   - postgres:9.5
-  - postgresci/postgres96-test
+  - postgres:9.6
 
 commands:
   - "echo 'Dogfooding :)'"
