@@ -219,3 +219,109 @@ create or replace function hook.github_push(
             FROM jsonb_populate_recordset(null::postgres_ci.commits, _commits) AS C;
     end;
 $$ language plpgsql security definer;
+
+
+alter table postgres_ci.commits add column project_id int not null default 0;
+
+update postgres_ci.commits c set project_id = (select project_id from postgres_ci.branches where branch_id = c.branch_id limit 1);
+
+alter table postgres_ci.commits alter column project_id drop default;
+
+drop index postgres_ci.idx_branch_project;
+create index idx_branch on postgres_ci.branches (branch_id);
+
+
+alter table postgres_ci.branches drop constraint branches_pkey cascade;
+alter table postgres_ci.branches add primary key (project_id, branch_id);
+
+alter table postgres_ci.commits add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+alter table postgres_ci.builds  add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+alter table postgres_ci.builds_counters add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+
+create or replace function project.add_commit(
+    _project_id      int,
+    _branch          text,
+    _commit_sha      text,
+    _commit_message  text,
+    _committed_at    timestamptz,
+    _committer_name  text,
+    _committer_email text,
+    _author_name     text,
+    _author_email    text,
+    out commit_id    int
+) returns int as $$
+    declare 
+        _branch_id int;
+    begin 
+        
+        _branch_id = project.get_branch_id(_project_id, _branch);
+
+        BEGIN 
+        
+            INSERT INTO postgres_ci.commits (
+                project_id,
+                branch_id,
+                commit_sha,
+                commit_message,
+                committed_at,
+                committer_name,
+                committer_email,
+                author_name,
+                author_email
+            ) VALUES (
+                _project_id,
+                _branch_id,
+                _commit_sha,
+                _commit_message,
+                _committed_at,
+                _committer_name,
+                _committer_email,
+                _author_name,
+                _author_email
+            ) RETURNING commits.commit_id INTO commit_id;
+
+            PERFORM build.new(_project_id, _branch_id, commit_id);
+
+        EXCEPTION WHEN unique_violation THEN
+
+            SELECT 
+                C.commit_id INTO commit_id 
+            FROM postgres_ci.commits C
+            WHERE C.branch_id = _branch_id 
+            AND  C.commit_sha = _commit_sha;
+        END;
+
+    end;
+$$ language plpgsql security definer;
+
+create or replace function build.fetch() returns table (
+    build_id   int,
+    created_at timestamptz
+) as $$
+    declare 
+        _build_id   int;
+        _created_at timestamptz;
+    begin 
+
+        SELECT 
+            B.build_id,
+            B.created_at
+                INTO 
+                    _build_id,
+                    _created_at
+        FROM postgres_ci.builds AS B
+        WHERE B.status = 'pending'
+        ORDER BY B.build_id 
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED;
+
+        IF NOT FOUND THEN
+            return;
+        END IF;
+
+        UPDATE postgres_ci.builds AS B SET status = 'accepted' WHERE B.build_id = _build_id;
+
+        return query 
+            SELECT _build_id, _created_at;
+    end;
+$$ language plpgsql security definer rows 1;

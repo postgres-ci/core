@@ -19,6 +19,7 @@ create or replace function project.add_commit(
         BEGIN 
         
             INSERT INTO postgres_ci.commits (
+                project_id,
                 branch_id,
                 commit_sha,
                 commit_message,
@@ -28,6 +29,7 @@ create or replace function project.add_commit(
                 author_name,
                 author_email
             ) VALUES (
+                _project_id,
                 _branch_id,
                 _commit_sha,
                 _commit_message,

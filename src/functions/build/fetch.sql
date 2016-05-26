@@ -14,7 +14,8 @@ create or replace function build.fetch() returns table (
                     _build_id,
                     _created_at
         FROM postgres_ci.builds AS B
-        WHERE B.status = 'pending' 
+        WHERE B.status = 'pending'
+        ORDER BY B.build_id 
         LIMIT 1
         FOR UPDATE SKIP LOCKED;
 

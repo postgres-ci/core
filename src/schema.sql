@@ -66,19 +66,21 @@ alter table postgres_ci.projects add constraint fk_project_owner_id foreign key 
 create sequence postgres_ci.branches_seq;
 
 create table postgres_ci.branches(
-    branch_id  int    not null default nextval('postgres_ci.branches_seq') primary key,
+    branch_id  int    not null default nextval('postgres_ci.branches_seq'),
     branch     text   not null,
     project_id int    not null references postgres_ci.projects(project_id),
-    created_at timestamptz not null default current_timestamp
+    created_at timestamptz not null default current_timestamp,
+    primary key (project_id, branch_id)
 );
 
-create index idx_branch_project on postgres_ci.branches (project_id);
+create index idx_branch on postgres_ci.branches (branch_id);
 
 create sequence postgres_ci.commits_seq;
 
 create table postgres_ci.commits(
     commit_id       int         not null default nextval('postgres_ci.commits_seq') primary key,
-    branch_id       int         not null references postgres_ci.branches(branch_id),
+    project_id      int         not null,
+    branch_id       int         not null,
     commit_sha      text        not null,
     commit_message  text        not null,
     committed_at    timestamptz not null,
@@ -88,22 +90,24 @@ create table postgres_ci.commits(
     author_email    text        not null,
     created_at      timestamptz not null default current_timestamp,
     constraint check_commit_sha check(length(commit_sha) = 40),
-    constraint uniq_commit unique(branch_id, commit_sha)
+    constraint uniq_commit unique(branch_id, commit_sha),
+    foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
 create sequence postgres_ci.builds_seq;
 
 create table postgres_ci.builds(
     build_id    int       not null default nextval('postgres_ci.builds_seq') primary key,
-    project_id  int       not null references postgres_ci.projects(project_id),
-    branch_id   int       not null references postgres_ci.branches(branch_id),
+    project_id  int       not null,
+    branch_id   int       not null,
     commit_id   int       not null references postgres_ci.commits(commit_id),
     config      text      not null,
     status      postgres_ci.status not null,
     error       text not null default '',
     created_at  timestamptz not null default current_timestamp,
     started_at  timestamptz,
-    finished_at timestamptz
+    finished_at timestamptz,
+    foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
 create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
@@ -112,10 +116,11 @@ create index idx_p_b_build on postgres_ci.builds(project_id, branch_id);
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
 
 create table postgres_ci.builds_counters(
-    project_id  int    not null references postgres_ci.projects(project_id),
-    branch_id   int    not null references postgres_ci.branches(branch_id),
+    project_id  int    not null,
+    branch_id   int    not null,
     counter     bigint not null,
-    constraint unique_builds_counters unique(project_id, branch_id)
+    constraint unique_builds_counters unique(project_id, branch_id),
+    foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
 create sequence postgres_ci.parts_seq;
