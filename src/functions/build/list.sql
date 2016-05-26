@@ -3,18 +3,22 @@ create or replace function build.list(
     _branch_id   int,
     _limit       int,
     _offset      int,
-    out total    bigint,
-    out branches jsonb,
-    out items    jsonb
+    out project_id   int,
+    out project_name text,
+    out total        bigint,
+    out branches     jsonb,
+    out items        jsonb
 ) returns record as $$
     begin 
 
         SELECT 
+            P.project_id,
+            P.project_name,
             (
                 SELECT 
-                    COALESCE(SUM(counter), 0) 
-                FROM postgres_ci.builds_counters
-                WHERE project_id = _project_id
+                    COALESCE(SUM(C.counter), 0) 
+                FROM postgres_ci.builds_counters AS C
+                WHERE C.project_id = _project_id
                 AND (
                     CASE WHEN _branch_id <> 0 
                         THEN branch_id  = _branch_id
@@ -27,11 +31,11 @@ create or replace function build.list(
                     COALESCE(array_to_json(array_agg(R.*)), '[]') 
                 FROM (
                     SELECT 
-                        branch_id,
-                        branch
-                    FROM postgres_ci.branches 
+                        B.branch_id,
+                        B.branch
+                    FROM postgres_ci.branches AS B
                     WHERE 
-                        project_id = _project_id
+                        B.project_id = _project_id
                     ORDER BY branch
                 ) AS R
             ),
@@ -67,8 +71,10 @@ create or replace function build.list(
                     OFFSET _offset
                 ) AS R
             )
-        INTO total, branches, items;
+            FROM postgres_ci.projects AS P
+            WHERE P.project_id = _project_id 
+            AND   P.is_deleted = false
+        INTO project_id, project_name, total, branches, items;
 
     end;
 $$ language plpgsql security definer;
-
