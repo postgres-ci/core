@@ -12,7 +12,12 @@ create or replace function build.stop(_build_id int, _config text, _error text) 
                     END
                 )::postgres_ci.status,
                 finished_at = current_timestamp
-        WHERE build_id = _build_id;
+        WHERE build_id = _build_id
+        AND   status   = 'running';
+        
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
 
         IF EXISTS(
             SELECT 

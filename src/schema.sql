@@ -110,7 +110,7 @@ create table postgres_ci.builds(
     foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
-create index idx_new_build on postgres_ci.builds(status) where status in ('pending');
+create index idx_new_build on postgres_ci.builds(status) where status in ('pending', 'accepted', 'running');
 create index idx_p_b_build on postgres_ci.builds(project_id, branch_id);
 
 alter table postgres_ci.projects add foreign key (last_build_id) references postgres_ci.builds(build_id);
@@ -136,6 +136,8 @@ create table postgres_ci.parts(
     started_at   timestamptz not null,
     finished_at  timestamptz not null
 );
+
+create index idx_parts_build on postgres_ci.parts(build_id);
 
 create table postgres_ci.tests(
     part_id     int   not null references postgres_ci.parts(part_id),

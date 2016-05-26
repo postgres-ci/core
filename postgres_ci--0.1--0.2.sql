@@ -1,3 +1,26 @@
+alter table postgres_ci.commits add column project_id int not null default 0;
+
+update postgres_ci.commits c set project_id = (select project_id from postgres_ci.branches where branch_id = c.branch_id limit 1);
+
+alter table postgres_ci.commits alter column project_id drop default;
+
+drop index postgres_ci.idx_branch_project;
+create index idx_branch on postgres_ci.branches (branch_id);
+drop index postgres_ci.idx_new_build;
+create index idx_new_build on postgres_ci.builds(status) where status in ('pending', 'accepted', 'running');
+    
+alter table postgres_ci.branches drop constraint branches_pkey cascade;
+alter table postgres_ci.branches add primary key (project_id, branch_id);
+alter table postgres_ci.builds          drop constraint builds_project_id_fkey;
+alter table postgres_ci.builds_counters drop constraint builds_counters_project_id_fkey;
+
+
+alter table postgres_ci.commits add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+alter table postgres_ci.builds  add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+alter table postgres_ci.builds_counters add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
+
+create index idx_parts_build on postgres_ci.parts(build_id);
+
 alter extension postgres_ci drop function build.view(int);
 drop function build.view(int);
 
@@ -221,23 +244,6 @@ create or replace function hook.github_push(
 $$ language plpgsql security definer;
 
 
-alter table postgres_ci.commits add column project_id int not null default 0;
-
-update postgres_ci.commits c set project_id = (select project_id from postgres_ci.branches where branch_id = c.branch_id limit 1);
-
-alter table postgres_ci.commits alter column project_id drop default;
-
-drop index postgres_ci.idx_branch_project;
-create index idx_branch on postgres_ci.branches (branch_id);
-
-
-alter table postgres_ci.branches drop constraint branches_pkey cascade;
-alter table postgres_ci.branches add primary key (project_id, branch_id);
-
-alter table postgres_ci.commits add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
-alter table postgres_ci.builds  add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
-alter table postgres_ci.builds_counters add foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full;
-
 create or replace function project.add_commit(
     _project_id      int,
     _branch          text,
@@ -325,3 +331,72 @@ create or replace function build.fetch() returns table (
             SELECT _build_id, _created_at;
     end;
 $$ language plpgsql security definer rows 1;
+
+
+create or replace function build.gc() returns void as $$
+    begin 
+    
+        WITH builds AS (
+            SELECT 
+                build_id 
+            FROM postgres_ci.builds
+            WHERE status IN ('accepted', 'running')
+            AND created_at < (current_timestamp - '1 hour'::interval)
+            ORDER BY build_id
+        ),
+        stop_containers AS (
+            SELECT 
+                pg_notify('postgres-ci::stop_container', (
+                        SELECT to_json(T.*) FROM (
+                            SELECT 
+                                P.container_id,
+                                current_timestamp AS created_at
+                        ) T
+                    )::text
+                )
+            FROM postgres_ci.parts AS P
+            JOIN builds AS B ON P.build_id = B.build_id
+        )
+        UPDATE postgres_ci.builds AS B
+            SET
+                status      = 'failed',
+                error       = 'Execution timeout',
+                finished_at = current_timestamp
+        WHERE B.build_id IN (SELECT build_id FROM builds);
+
+    end;
+$$ language plpgsql security definer;
+
+create or replace function build.stop(_build_id int, _config text, _error text) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.builds
+            SET 
+                config      = _config,
+                error       = _error,
+                status      = (
+                    CASE 
+                        WHEN _error = '' THEN 'success' 
+                        ELSE 'failed' 
+                    END
+                )::postgres_ci.status,
+                finished_at = current_timestamp
+        WHERE build_id = _build_id
+        AND   status   = 'running';
+        
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
+        IF EXISTS(
+            SELECT 
+            FROM postgres_ci.parts 
+            WHERE build_id = _build_id 
+            AND success IS False
+            LIMIT 1
+        ) THEN 
+            UPDATE postgres_ci.builds SET status = 'failed'::postgres_ci.status WHERE build_id = _build_id;
+        END IF;
+
+    end;
+$$ language plpgsql security definer;
