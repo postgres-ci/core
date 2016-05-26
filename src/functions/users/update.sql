@@ -18,7 +18,8 @@ create or replace function users.update(
                 SET 
                     user_name    = _user_name,
                     user_email   = _user_email,
-                    is_superuser = _is_superuser
+                    is_superuser = _is_superuser,
+                    updated_at   = current_timestamp
             WHERE user_id = _user_id;
 
         EXCEPTION WHEN OTHERS THEN
