@@ -14,7 +14,12 @@ create or replace function build.start(
                 status     = 'running',
                 started_at = current_timestamp
         WHERE B.build_id = _build_id 
+        AND   B.status   = 'accepted'
         RETURNING B.commit_id INTO _commit_id;
+        
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
 
         SELECT 
             P.project_id,

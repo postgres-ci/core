@@ -151,17 +151,7 @@ create index idx_part_tests on postgres_ci.tests(part_id);
 
 /*
 
-select * from users.add('user', 'password', 'User', 'email@email.com', false);
-select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
-select * from project.add('Postgres-CI Core (github)', 1, '/https://github.com/postgres-ci/core', '');
-
-SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
-
-select build.new(1,1,1);
-
-insert into postgres_ci.users (user_name, user_login, user_email, hash, salt)
-    select 'user_name' || g, 'user_login' || g, 'user@email' || g, 'af80e91bde00a80b2c4a98e48b8716a6c06ab391', 'af80e91bde00a80b2c4a98e48b8716a6c06ab391' 
-        from generate_series(1, 1000000) g;
+select * from users.add('user', 'password', 'User', 'email@email.com', true);
 
 */
 

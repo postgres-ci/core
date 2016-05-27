@@ -165,17 +165,7 @@ create index idx_part_tests on postgres_ci.tests(part_id);
 
 /*
 
-select * from users.add('user', 'password', 'User', 'email@email.com', false);
-select * from project.add('Postgres-CI Core', 1, '/home/kshvakov/gosrc/src/github.com/postgres-ci/core', '');
-select * from project.add('Postgres-CI Core (github)', 1, '/https://github.com/postgres-ci/core', '');
-
-SELECT * FROM project.add_commit(1, 'master', 'be60d1fbf2f6d18f9963e263ad8284217a8fcded', 'Test', now(), 'kshvakov', 'shvakov@gmail.com', 'kshvakov', 'shvakov@gmail.com');
-
-select build.new(1,1,1);
-
-insert into postgres_ci.users (user_name, user_login, user_email, hash, salt)
-    select 'user_name' || g, 'user_login' || g, 'user@email' || g, 'af80e91bde00a80b2c4a98e48b8716a6c06ab391', 'af80e91bde00a80b2c4a98e48b8716a6c06ab391' 
-        from generate_series(1, 1000000) g;
+select * from users.add('user', 'password', 'User', 'email@email.com', true);
 
 */
 
@@ -618,7 +608,12 @@ create or replace function build.start(
                 status     = 'running',
                 started_at = current_timestamp
         WHERE B.build_id = _build_id 
+        AND   B.status   = 'accepted'
         RETURNING B.commit_id INTO _commit_id;
+        
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
 
         SELECT 
             P.project_id,
@@ -904,6 +899,21 @@ create or replace function project.get_branch_id(_project_id int, _branch text, 
     end;
 $$ language plpgsql security definer;
 
+/* source file: src/functions/project/get_github_secret.sql */
+
+create or replace function project.get_github_secret(_github_name text) returns table(
+    secret text
+) as $$
+    begin 
+        return query 
+            SELECT 
+                github_secret 
+            FROM postgres_ci.projects 
+            WHERE github_name = _github_name 
+            AND   is_deleted = false;
+    end
+$$ language plpgsql security definer rows 1;
+
 /* source file: src/functions/project/get_possible_owners.sql */
 
 create or replace function project.get_possible_owners() returns table (
@@ -996,21 +1006,6 @@ create or replace function project.github_name(_repository_url text) returns tex
         END CASE;
     end;
 $$ language plpgsql security definer;
-
-/* source file: src/functions/project/github_secret.sql */
-
-create or replace function project.github_secret(_github_name text) returns table(
-    secret text
-) as $$
-    begin 
-        return query 
-            SELECT 
-                github_secret 
-            FROM postgres_ci.projects 
-            WHERE github_name = _github_name 
-            AND   is_deleted = false;
-    end
-$$ language plpgsql security definer rows 1;
 
 /* source file: src/functions/project/list.sql */
 
@@ -1191,13 +1186,6 @@ create or replace function hook.push(
     end;
 $$ language plpgsql security definer;
 
-/*
-
-select 
-* 
-from hook.push('d9a21e59-926d-4083-89b0-463650476eb8', 'master', '[{"commit_sha":"fa7e3d5fc6b69309e2e8eb9e2af82da3cd96f383","commit_message":"Test","committed_at":"2016-05-05T17:40:59.431696+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:40:59.431696+03:00"},{"commit_sha":"654fe21cd1874d3028bfbc84e1ff4b6245cfac9b","commit_message":"add list builds fn\n","committed_at":"2016-05-05T17:53:55+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-05T17:53:55.860997+03:00"},{"commit_sha":"ac4c4a78e4f0321d273c0502165c98f8b71d2eb0","commit_message":"misc\n","committed_at":"2016-05-06T11:45:03+03:00","committer_name":"kshvakov","committer_email":"shvakov@gmail.com","author_name":"kshvakov","author_email":"shvakov@gmail.com","created_at":"2016-05-06T11:45:03.421098+03:00"}]');
-
-*/
 
 /* source file: src/functions/password/change.sql */
 

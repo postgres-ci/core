@@ -1,4 +1,4 @@
-create or replace function project.github_secret(_github_name text) returns table(
+create or replace function project.get_github_secret(_github_name text) returns table(
     secret text
 ) as $$
     begin 
