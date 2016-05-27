@@ -425,18 +425,26 @@ $$ language plpgsql security definer rows 1;
 /* source file: src/functions/build/gc.sql */
 
 create or replace function build.gc() returns void as $$
+    declare 
+        _build_id int;
     begin 
-    
-        WITH builds AS (
+
+        FOR _build_id IN 
             SELECT 
                 build_id 
             FROM postgres_ci.builds
             WHERE status IN ('accepted', 'running')
             AND created_at < (current_timestamp - '1 hour'::interval)
             ORDER BY build_id
-        ),
-        stop_containers AS (
-            SELECT 
+        LOOP 
+            UPDATE postgres_ci.builds AS B
+                SET
+                    status      = 'failed',
+                    error       = 'Execution timeout',
+                    finished_at = current_timestamp
+            WHERE B.build_id = _build_id;
+
+            PERFORM 
                 pg_notify('postgres-ci::stop_container', (
                         SELECT to_json(T.*) FROM (
                             SELECT 
@@ -446,17 +454,11 @@ create or replace function build.gc() returns void as $$
                     )::text
                 )
             FROM postgres_ci.parts AS P
-            JOIN builds AS B ON P.build_id = B.build_id
-        )
-        UPDATE postgres_ci.builds AS B
-            SET
-                status      = 'failed',
-                error       = 'Execution timeout',
-                finished_at = current_timestamp
-        WHERE B.build_id IN (SELECT build_id FROM builds);
-
+            WHERE P.build_id = _build_id;
+        END LOOP;
     end;
 $$ language plpgsql security definer;
+
 
 /* source file: src/functions/build/list.sql */
 
