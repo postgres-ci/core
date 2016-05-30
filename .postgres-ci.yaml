@@ -4,7 +4,7 @@ images:
 
 commands:
   - "echo 'Dogfooding :)'"
-  - "bash test_suite_setup_script.sh"
+  - "bash test_setup.sh"
 
 postgres:
   database: postgres_ci
