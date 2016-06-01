@@ -123,6 +123,11 @@ create table postgres_ci.builds_counters(
     foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
+create unlogged table postgres_ci.notify(
+    build_id   int         not null references postgres_ci.builds(build_id) primary key,
+    created_at timestamptz not null default current_timestamp
+);
+
 create sequence postgres_ci.parts_seq;
 
 create table postgres_ci.parts(
@@ -149,9 +154,5 @@ create table postgres_ci.tests(
 create index idx_part_tests on postgres_ci.tests(part_id);
 
 
-/*
-
-select * from users.add('user', 'password', 'User', 'email@email.com', true);
-
-*/
+/* select * from users.add('user', 'password', 'User', 'email@email.com', true); */
 
