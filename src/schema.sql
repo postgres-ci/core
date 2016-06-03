@@ -25,7 +25,19 @@ create table postgres_ci.users (
 
 create unique index unique_user_login on postgres_ci.users (lower(user_login));
 create unique index unique_user_email on postgres_ci.users (lower(user_email));
-create index        find_user         on postgres_ci.users using gin(lower(user_name || user_login || user_email) gin_trgm_ops);
+
+create type postgres_ci.notification_method as enum (
+    'none',
+    'email',
+    'telegram'
+);
+
+create table postgres_ci.user_notification_method(
+    user_id int not null references postgres_ci.users(user_id) primary key,
+    method  postgres_ci.notification_method not null default 'none',
+    text_id text   not null,
+    int_id  bigint not null default 0
+);
 
 create unlogged table postgres_ci.sessions(
     session_id text        not null default    postgres_ci.sha1(gen_salt('md5') || gen_salt('md5')) primary key,
