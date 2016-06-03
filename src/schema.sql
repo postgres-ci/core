@@ -135,7 +135,7 @@ create table postgres_ci.builds_counters(
     foreign key (project_id, branch_id) references postgres_ci.branches(project_id, branch_id) match full
 );
 
-create unlogged table postgres_ci.notify(
+create unlogged table postgres_ci.notification(
     build_id   int         not null references postgres_ci.builds(build_id) primary key,
     created_at timestamptz not null default current_timestamp
 );
@@ -164,6 +164,14 @@ create table postgres_ci.tests(
 );
 
 create index idx_part_tests on postgres_ci.tests(part_id);
+
+create table postgres_ci.settings (
+    smtp_host      text not null,
+    smtp_port      int  not null,
+    smtp_username  text not null,
+    smtp_password  text not null,
+    telegram_token text not null
+);
 
 
 /* select * from users.add('user', 'password', 'User', 'email@email.com', true); */

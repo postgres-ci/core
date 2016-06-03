@@ -1,4 +1,4 @@
-create or replace function notify.fetch() returns table (
+create or replace function notification.fetch() returns table (
     build_id int,
     send_to  jsonb
 ) as $$
@@ -6,7 +6,7 @@ create or replace function notify.fetch() returns table (
         _build_id int;
     begin 
 
-        SELECT N.build_id INTO _build_id FROM postgres_ci.notify AS N ORDER BY N.build_id FOR UPDATE SKIP LOCKED;
+        SELECT N.build_id INTO _build_id FROM postgres_ci.notification AS N ORDER BY N.build_id FOR UPDATE SKIP LOCKED;
 
         IF NOT FOUND THEN 
             return;
@@ -21,8 +21,11 @@ create or replace function notify.fetch() returns table (
                     FROM (
                         SELECT 
                             U.user_name,
-                            U.user_email
+                            M.method,
+                            M.text_id,
+                            M.int_id
                         FROM postgres_ci.users AS U 
+                        JOIN postgres_ci.user_notification_method AS M ON U.user_id = M.user_id
                         WHERE U.user_id IN (
                             SELECT 
                                 P.project_owner_id 
@@ -40,12 +43,12 @@ create or replace function notify.fetch() returns table (
                                 JOIN postgres_ci.builds AS B USING(commit_id)
                                 WHERE B.build_id = _build_id
                             )
-                        ) 
+                        ) AND M.method <> 'none'
                     ) AS P 
                 )::jsonb
             ;
 
-        DELETE FROM postgres_ci.notify AS N WHERE N.build_id = _build_id;
+        DELETE FROM postgres_ci.notification AS N WHERE N.build_id = _build_id;
     end;
 $$ language plpgsql security definer;
 

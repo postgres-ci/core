@@ -1,6 +1,6 @@
 drop index postgres_ci.find_user;
 
-create unlogged table postgres_ci.notify(
+create unlogged table postgres_ci.notification(
     build_id   int         not null references postgres_ci.builds(build_id) primary key,
     created_at timestamptz not null default current_timestamp
 );
@@ -20,3 +20,14 @@ create table postgres_ci.user_notification_method(
 
 insert into postgres_ci.user_notification_method (user_id, method, text_id)
 	select user_id, 'email', user_email from postgres_ci.users;
+
+
+create table postgres_ci.settings (
+    smtp_host      text not null,
+    smtp_port      int  not null,
+    smtp_username  text not null,
+    smtp_password  text not null,
+    telegram_token text not null
+);
+
+insert into postgres_ci.settings values('', 0, '', '', '');
