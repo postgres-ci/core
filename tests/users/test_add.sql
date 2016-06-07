@@ -15,6 +15,8 @@ create or replace function users.test_add() returns void as $$
                     assert.equal('samelephant82@gmail.com', user_email)
                 FROM postgres_ci.users WHERE user_id = _user_id;
 
+                PERFORM assert.true(EXISTS(SELECT null FROM postgres_ci.user_notification_method WHERE user_id = _user_id));
+
             END IF;
             
             IF assert.not_null(auth.login('login', 'password')) THEN 
