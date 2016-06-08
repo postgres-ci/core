@@ -1,7 +1,6 @@
 create schema notification;
 grant usage   on schema notification to public;
 grant execute on all functions in schema notification to public;
---select pg_catalog.pg_extension_config_dump('postgres_ci.user_notification_method', '');
 drop index postgres_ci.find_user;
 
 create unlogged table postgres_ci.notification(
@@ -22,6 +21,8 @@ create table postgres_ci.user_notification_method(
     int_id  bigint not null default 0
 );
 
+select pg_catalog.pg_extension_config_dump('postgres_ci.user_notification_method', '');
+
 create unique index unique_user_notification_method 
     on postgres_ci.user_notification_method (method, lower(text_id))
 where method <> 'none' and text_id <> '';
@@ -37,7 +38,7 @@ create table postgres_ci.settings (
     smtp_password  text not null,
     telegram_token text not null
 );
-
+select pg_catalog.pg_extension_config_dump('postgres_ci.settings', '');
 insert into postgres_ci.settings values('', '', 0, '', '', '');
 
 create or replace function notification.fetch() returns table (

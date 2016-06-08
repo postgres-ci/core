@@ -23,7 +23,7 @@ cat postgres_ci--0.2.sql | sed '/CREATE EXTENSION postgres_ci/d' | sed '/pg_exte
 
 env PGPASSWORD=password psql -q -v ON_ERROR_STOP=1 -U ci_owner -d $TEST_DATABASE -f dump.sql
 
-cat postgres_ci--0.2--0.3.sql | sed '/alter extension/d' > upgrade.sql
+cat postgres_ci--0.2--0.3.sql | sed '/alter extension/d' | sed '/pg_extension_config_dump/d' > upgrade.sql
 
 env PGPASSWORD=password psql -q -v ON_ERROR_STOP=1 -U ci_owner -d $TEST_DATABASE -f upgrade.sql
 

@@ -1,6 +1,5 @@
 select pg_catalog.pg_extension_config_dump('postgres_ci.users', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.users_seq', '');
-select pg_catalog.pg_extension_config_dump('postgres_ci.user_notification_method', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.projects', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.projects_seq', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.branches', '');
@@ -11,3 +10,5 @@ select pg_catalog.pg_extension_config_dump('postgres_ci.builds', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.builds_seq', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.parts', '');
 select pg_catalog.pg_extension_config_dump('postgres_ci.parts_seq', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.settings', '');
+select pg_catalog.pg_extension_config_dump('postgres_ci.user_notification_method', '');
