@@ -1,4 +1,4 @@
-create or replace function notification.test_bind_with_telegram() returns void as $$
+create or replace function notification.test_find_user_by_telegram_username() returns void as $$
     declare 
         _user_id int;
     begin 
@@ -27,20 +27,10 @@ create or replace function notification.test_bind_with_telegram() returns void a
 
                     PERFORM notification.bind_with_telegram(_user_id, 'telegram_username', 42);
 
-                    IF assert.equal(42::bigint, (SELECT int_id FROM postgres_ci.user_notification_method WHERE user_id = _user_id)) THEN 
-                    
-                        PERFORM assert.exception(
-                            $sql$ SELECT notification.bind_with_telegram(-1, 'telegram_username', 42) $sql$, 
-                            exception_message  := 'NOT_FOUND',
-                            exception_sqlstate := 'P0002'
-                        ); 
-
-                        PERFORM assert.exception(
-                            $sql$ SELECT notification.bind_with_telegram($sql$ || _user_id || $sql$, 'telegram_username2', 42) $sql$, 
-                            exception_message  := 'NOT_FOUND',
-                            exception_sqlstate := 'P0002'
-                        );   
-                    END IF;
+                    PERFORM 
+                        assert.equal(_user_id, user_id),
+                        assert.equal(42::bigint, telegram_id)
+                    FROM notification.find_user_by_telegram_username('telegram_username');
                     
                 END IF;
 

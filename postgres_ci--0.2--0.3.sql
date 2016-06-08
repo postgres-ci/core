@@ -22,6 +22,10 @@ create table postgres_ci.user_notification_method(
     int_id  bigint not null default 0
 );
 
+create unique index unique_user_notification_method 
+    on postgres_ci.user_notification_method (method, lower(text_id))
+where method <> 'none' and text_id <> '';
+
 insert into postgres_ci.user_notification_method (user_id, method, text_id)
 	select user_id, 'email', user_email from postgres_ci.users;
 
@@ -232,3 +236,20 @@ create or replace function notification.bind_with_telegram(
         END IF;
     end;
 $$ language plpgsql security definer; 
+
+create or replace function notification.find_user_by_telegram_username(_telegram_username text) returns table (
+    user_id    int,
+    telegram_id bigint
+) as $$
+    begin 
+
+        return query 
+            SELECT 
+                N.user_id, 
+                N.int_id 
+            FROM postgres_ci.user_notification_method AS N
+            WHERE N.method  = 'telegram'
+            AND   N.text_id = _telegram_username;
+
+    end;
+$$ language plpgsql security definer rows 1;

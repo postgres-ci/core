@@ -39,6 +39,10 @@ create table postgres_ci.user_notification_method(
     int_id  bigint not null default 0
 );
 
+create unique index unique_user_notification_method 
+    on postgres_ci.user_notification_method (method, lower(text_id))
+where method <> 'none' and text_id <> '';
+
 create unlogged table postgres_ci.sessions(
     session_id text        not null default    postgres_ci.sha1(gen_salt('md5') || gen_salt('md5')) primary key,
     user_id    int         not null references postgres_ci.users(user_id),

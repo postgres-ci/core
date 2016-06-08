@@ -28,6 +28,7 @@
 \i users/test_list.sql
 \i notification/test_update_method.sql
 \i notification/test_bind_with_telegram.sql
+\i notification/test_find_user_by_telegram_username.sql
 \i password/test_check.sql
 \i password/test_change.sql
 \i password/test_reset.sql
@@ -68,7 +69,8 @@ begin
         ('users',       'test_delete'),
         ('users',       'test_list'),
         ('notification','test_update_method'),
-        ('notification', 'test_bind_with_telegram'),
+        ('notification','test_bind_with_telegram'),
+        ('notification','test_find_user_by_telegram_username'),
         ('password',    'test_check'),
         ('password',    'test_change'),
         ('password',    'test_reset'),
