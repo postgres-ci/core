@@ -178,6 +178,7 @@ create table postgres_ci.settings (
     telegram_token text not null
 );
 
+insert into postgres_ci.settings values('', '', 0, '', '', '');
 
 /* select * from users.add('user', 'password', 'User', 'email@email.com', true); */
 

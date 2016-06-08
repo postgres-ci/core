@@ -33,6 +33,7 @@
 \i password/test_change.sql
 \i password/test_reset.sql
 \i postgres_ci/test_sha1.sql
+\i postgres_ci/test_update_settings.sql
 
 
 do $$ declare
@@ -74,7 +75,8 @@ begin
         ('password',    'test_check'),
         ('password',    'test_change'),
         ('password',    'test_reset'),
-        ('postgres_ci', 'test_sha1')
+        ('postgres_ci', 'test_sha1'),
+        ('postgres_ci', 'test_update_settings')
     LOOP 
         PERFORM assert.add_test(namespace, procedure);
     END LOOP;
