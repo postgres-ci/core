@@ -36,7 +36,7 @@ create or replace function users.add(
                 _salt
             ) RETURNING users.user_id INTO user_id;
 
-            INSERT INTO postgres_ci.user_notification_method (user_id, method, text_id) VALUES (add.user_id, 'none', '');
+            INSERT INTO postgres_ci.user_notification_method (user_id, method, text_id) VALUES (add.user_id, 'email', _user_email);
 
         EXCEPTION WHEN OTHERS THEN
         

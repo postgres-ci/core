@@ -111,7 +111,6 @@ create or replace function notification.fetch() returns table (
     end;
 $$ language plpgsql security definer rows 1;
 
-
 create or replace function users.add(
     _user_login   text,
     _password     text,
@@ -150,7 +149,7 @@ create or replace function users.add(
                 _salt
             ) RETURNING users.user_id INTO user_id;
 
-            INSERT INTO postgres_ci.user_notification_method (user_id, method, text_id) VALUES (add.user_id, 'none', '');
+            INSERT INTO postgres_ci.user_notification_method (user_id, method, text_id) VALUES (add.user_id, 'email', _user_email);
 
         EXCEPTION WHEN OTHERS THEN
         
@@ -186,3 +185,50 @@ create or replace function users.add(
 $$ language plpgsql security definer;
 
 
+create or replace function notification.update_method(
+    _user_id int,
+    _method  postgres_ci.notification_method,
+    _text_id text
+) returns void as $$
+    begin 
+
+        CASE 
+            WHEN _method = 'none' THEN 
+                UPDATE postgres_ci.user_notification_method
+                    SET 
+                        method  = _method,
+                        text_id = '',
+                        int_id  = 0
+                WHERE user_id = _user_id;
+            ELSE 
+                UPDATE postgres_ci.user_notification_method
+                    SET 
+                        method  = _method,
+                        text_id = _text_id,
+                        int_id  = 0
+                WHERE user_id = _user_id AND NOT (
+                    text_id = _text_id AND method = _method
+                );
+        END CASE;
+
+    end;
+$$ language plpgsql security definer;
+
+create or replace function notification.bind_with_telegram(
+    _user_id           int, 
+    _telegram_username text, 
+    _telegram_id       bigint
+) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.user_notification_method 
+            SET
+                int_id = _telegram_id
+        WHERE user_id = _user_id
+        AND   text_id = _telegram_username;
+
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+    end;
+$$ language plpgsql security definer; 
