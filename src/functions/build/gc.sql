@@ -29,6 +29,8 @@ create or replace function build.gc() returns void as $$
                 )
             FROM postgres_ci.parts AS P
             WHERE P.build_id = _build_id;
+
+            PERFORM build.notify(_build_id);
         END LOOP;
     end;
 $$ language plpgsql security definer;

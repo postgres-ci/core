@@ -14,6 +14,8 @@ create or replace function build.stop(_build_id int, _config text, _error text) 
                 finished_at = current_timestamp
         WHERE build_id = _build_id
         AND   status   = 'running';
+
+        PERFORM build.notify(_build_id);
         
         IF NOT FOUND THEN 
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';

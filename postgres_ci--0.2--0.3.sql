@@ -246,3 +246,95 @@ create or replace function notification.find_user_by_telegram_username(_telegram
 $$ language plpgsql security definer rows 1;
 
 
+create or replace function build.stop(_build_id int, _config text, _error text) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.builds
+            SET 
+                config      = _config,
+                error       = _error,
+                status      = (
+                    CASE 
+                        WHEN _error = '' THEN 'success' 
+                        ELSE 'failed' 
+                    END
+                )::postgres_ci.status,
+                finished_at = current_timestamp
+        WHERE build_id = _build_id
+        AND   status   = 'running';
+
+        PERFORM build.notify(_build_id);
+        
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+
+        IF EXISTS(
+            SELECT 
+            FROM postgres_ci.parts 
+            WHERE build_id = _build_id 
+            AND success IS False
+            LIMIT 1
+        ) THEN 
+            UPDATE postgres_ci.builds SET status = 'failed'::postgres_ci.status WHERE build_id = _build_id;
+        END IF;
+
+    end;
+$$ language plpgsql security definer;
+
+
+create or replace function build.gc() returns void as $$
+    declare 
+        _build_id int;
+    begin 
+
+        FOR _build_id IN 
+            SELECT 
+                build_id 
+            FROM postgres_ci.builds
+            WHERE status IN ('accepted', 'running')
+            AND created_at < (current_timestamp - '1 hour'::interval)
+            ORDER BY build_id
+        LOOP 
+            UPDATE postgres_ci.builds AS B
+                SET
+                    status      = 'failed',
+                    error       = 'Execution timeout',
+                    finished_at = current_timestamp
+            WHERE B.build_id = _build_id;
+
+            PERFORM 
+                pg_notify('postgres-ci::stop_container', (
+                        SELECT to_json(T.*) FROM (
+                            SELECT 
+                                P.container_id,
+                                current_timestamp AS created_at
+                        ) T
+                    )::text
+                )
+            FROM postgres_ci.parts AS P
+            WHERE P.build_id = _build_id;
+
+            PERFORM build.notify(_build_id);
+        END LOOP;
+    end;
+$$ language plpgsql security definer;
+
+create or replace function build.notify(_build_id int) returns boolean as $$
+    begin 
+
+        INSERT INTO postgres_ci.notification (build_id) VALUES (_build_id);
+
+        PERFORM pg_notify('postgres-ci::notification', (
+                SELECT to_json(T.*) FROM (
+                    SELECT 
+                        _build_id         AS build_id,
+                        CURRENT_TIMESTAMP AS created_at
+                ) T
+            )::text
+        );
+
+        return true;
+        
+    end;
+$$ language plpgsql security definer;
