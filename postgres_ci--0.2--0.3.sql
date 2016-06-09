@@ -34,6 +34,7 @@ insert into postgres_ci.user_notification_method (user_id, method, text_id)
 create or replace function notification.fetch() returns table (
     build_id            int,
     build_status        postgres_ci.status,
+    project_id          int,
     project_name        text,
     branch              text,
     build_error         text,
@@ -68,6 +69,7 @@ create or replace function notification.fetch() returns table (
             SELECT 
                 B.build_id,
                 B.status,
+                P.project_id,
                 P.project_name,
                 BR.branch,
                 B.error,
@@ -112,6 +114,7 @@ create or replace function notification.fetch() returns table (
         DELETE FROM postgres_ci.notification AS N WHERE N.build_id = _build_id;
     end;
 $$ language plpgsql security definer rows 1;
+
 
 
 create or replace function users.add(

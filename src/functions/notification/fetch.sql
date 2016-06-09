@@ -1,6 +1,7 @@
 create or replace function notification.fetch() returns table (
     build_id            int,
     build_status        postgres_ci.status,
+    project_id          int,
     project_name        text,
     branch              text,
     build_error         text,
@@ -35,6 +36,7 @@ create or replace function notification.fetch() returns table (
             SELECT 
                 B.build_id,
                 B.status,
+                P.project_id,
                 P.project_name,
                 BR.branch,
                 B.error,
