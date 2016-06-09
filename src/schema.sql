@@ -169,16 +169,6 @@ create table postgres_ci.tests(
 
 create index idx_part_tests on postgres_ci.tests(part_id);
 
-create table postgres_ci.settings (
-    app_host       text not null,
-    smtp_host      text not null,
-    smtp_port      int  not null,
-    smtp_username  text not null,
-    smtp_password  text not null,
-    telegram_token text not null
-);
-
-insert into postgres_ci.settings values('', '', 0, '', '', '');
 
 /* select * from users.add('user', 'password', 'User', 'email@email.com', true); */
 
