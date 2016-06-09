@@ -1,6 +1,7 @@
 create or replace function notification.fetch() returns table (
-    build_id           int,
+    build_id            int,
     build_status        postgres_ci.status,
+    project_name        text,
     branch              text,
     build_error         text,
     build_created_at    timestamptz,
@@ -19,7 +20,12 @@ create or replace function notification.fetch() returns table (
         _build_id int;
     begin 
 
-        SELECT N.build_id INTO _build_id FROM postgres_ci.notification AS N ORDER BY N.build_id FOR UPDATE SKIP LOCKED;
+        SELECT 
+            N.build_id INTO _build_id 
+        FROM postgres_ci.notification AS N 
+        ORDER BY N.build_id 
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED;
 
         IF NOT FOUND THEN 
             return;
@@ -29,6 +35,7 @@ create or replace function notification.fetch() returns table (
             SELECT 
                 B.build_id,
                 B.status,
+                P.project_name,
                 BR.branch,
                 B.error,
                 B.created_at,
