@@ -263,11 +263,11 @@ create or replace function build.stop(_build_id int, _config text, _error text) 
         WHERE build_id = _build_id
         AND   status   = 'running';
 
-        PERFORM build.notify(_build_id);
-        
         IF NOT FOUND THEN 
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
+
+        PERFORM build.notify(_build_id);
 
         IF EXISTS(
             SELECT 
@@ -281,6 +281,7 @@ create or replace function build.stop(_build_id int, _config text, _error text) 
 
     end;
 $$ language plpgsql security definer;
+
 
 
 create or replace function build.gc() returns void as $$
