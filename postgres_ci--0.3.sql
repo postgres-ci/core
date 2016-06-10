@@ -821,6 +821,35 @@ $$ language plpgsql security definer;
 
 
 
+/* source file: src/functions/project/add.sql */
+
+create or replace function project.add(
+    _project_name     text,
+    _project_owner_id int,
+    _repository_url   text,
+    _github_secret    text,
+    out project_id    int
+) returns int as $$
+    begin 
+
+        INSERT INTO postgres_ci.projects (
+            project_name,
+            project_owner_id,
+            repository_url,
+            github_name,
+            github_secret
+        ) VALUES (
+            _project_name,
+            _project_owner_id,
+            _repository_url,
+            project.github_name(_repository_url),
+            _github_secret
+        ) RETURNING projects.project_id INTO project_id;
+
+    end;
+$$ language plpgsql security definer;
+
+
 /* source file: src/functions/project/add_commit.sql */
 
 create or replace function project.add_commit(
@@ -880,35 +909,6 @@ create or replace function project.add_commit(
 $$ language plpgsql security definer;
 
 
-/* source file: src/functions/project/add.sql */
-
-create or replace function project.add(
-    _project_name     text,
-    _project_owner_id int,
-    _repository_url   text,
-    _github_secret    text,
-    out project_id    int
-) returns int as $$
-    begin 
-
-        INSERT INTO postgres_ci.projects (
-            project_name,
-            project_owner_id,
-            repository_url,
-            github_name,
-            github_secret
-        ) VALUES (
-            _project_name,
-            _project_owner_id,
-            _repository_url,
-            project.github_name(_repository_url),
-            _github_secret
-        ) RETURNING projects.project_id INTO project_id;
-
-    end;
-$$ language plpgsql security definer;
-
-
 /* source file: src/functions/project/delete.sql */
 
 create or replace function project.delete(_project_id int) returns void as $$
@@ -918,65 +918,6 @@ create or replace function project.delete(_project_id int) returns void as $$
                 is_deleted = true,
                 updated_at = current_timestamp 
         WHERE project_id = _project_id;
-    end;
-$$ language plpgsql security definer;
-
-/* source file: src/functions/project/get_branch_id.sql */
-
-create or replace function project.get_branch_id(_project_id int, _branch text, out branch_id int) returns int as $$
-    begin 
-
-        SELECT 
-            B.branch_id INTO branch_id 
-        FROM postgres_ci.branches AS B
-        WHERE B.project_id = _project_id
-        AND   B.branch     = _branch;
-
-        IF NOT FOUND THEN
-
-            INSERT INTO postgres_ci.branches (
-                project_id,
-                branch
-            ) VALUES (
-                _project_id,
-                _branch
-            ) RETURNING branches.branch_id INTO branch_id; 
-            
-        END IF;
-    end;
-$$ language plpgsql security definer;
-
-/* source file: src/functions/project/get_github_secret.sql */
-
-create or replace function project.get_github_secret(_github_name text) returns table(
-    secret text
-) as $$
-    begin 
-        return query 
-            SELECT 
-                github_secret 
-            FROM postgres_ci.projects 
-            WHERE github_name = _github_name 
-            AND   is_deleted = false;
-    end
-$$ language plpgsql security definer rows 1;
-
-/* source file: src/functions/project/get_possible_owners.sql */
-
-create or replace function project.get_possible_owners() returns table (
-    user_id int,
-    user_name text
-) as $$
-    begin 
-
-        return query
-            SELECT 
-                U.user_id,
-                U.user_name
-            FROM postgres_ci.users AS U
-            WHERE U.is_deleted = false
-            ORDER BY U.user_id; 
-
     end;
 $$ language plpgsql security definer;
 
@@ -1035,6 +976,65 @@ create or replace function project.get(
         IF NOT FOUND THEN 
             RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
         END IF;
+
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/project/get_branch_id.sql */
+
+create or replace function project.get_branch_id(_project_id int, _branch text, out branch_id int) returns int as $$
+    begin 
+
+        SELECT 
+            B.branch_id INTO branch_id 
+        FROM postgres_ci.branches AS B
+        WHERE B.project_id = _project_id
+        AND   B.branch     = _branch;
+
+        IF NOT FOUND THEN
+
+            INSERT INTO postgres_ci.branches (
+                project_id,
+                branch
+            ) VALUES (
+                _project_id,
+                _branch
+            ) RETURNING branches.branch_id INTO branch_id; 
+            
+        END IF;
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/project/get_github_secret.sql */
+
+create or replace function project.get_github_secret(_github_name text) returns table(
+    secret text
+) as $$
+    begin 
+        return query 
+            SELECT 
+                github_secret 
+            FROM postgres_ci.projects 
+            WHERE github_name = _github_name 
+            AND   is_deleted = false;
+    end
+$$ language plpgsql security definer rows 1;
+
+/* source file: src/functions/project/get_possible_owners.sql */
+
+create or replace function project.get_possible_owners() returns table (
+    user_id int,
+    user_name text
+) as $$
+    begin 
+
+        return query
+            SELECT 
+                U.user_id,
+                U.user_name
+            FROM postgres_ci.users AS U
+            WHERE U.is_deleted = false
+            ORDER BY U.user_id; 
 
     end;
 $$ language plpgsql security definer;
@@ -1301,6 +1301,165 @@ create or replace function password.reset(_user_id int, _password text) returns 
                 salt       = _salt,
                 updated_at = current_timestamp
         WHERE user_id = _user_id; 
+    end;
+$$ language plpgsql security definer;
+
+/* source file: src/functions/notification/bind_with_telegram.sql */
+
+create or replace function notification.bind_with_telegram(
+    _user_id           int, 
+    _telegram_username text, 
+    _telegram_id       bigint
+) returns void as $$
+    begin 
+
+        UPDATE postgres_ci.user_notification_method 
+            SET
+                int_id = _telegram_id
+        WHERE user_id = _user_id
+        AND   method  = 'telegram'
+        AND   text_id = _telegram_username;
+
+        IF NOT FOUND THEN 
+            RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE = 'no_data_found';
+        END IF;
+    end;
+$$ language plpgsql security definer; 
+
+/* source file: src/functions/notification/fetch.sql */
+
+create or replace function notification.fetch() returns table (
+    build_id            int,
+    build_status        postgres_ci.status,
+    project_id          int,
+    project_name        text,
+    branch              text,
+    build_error         text,
+    build_created_at    timestamptz,
+    build_started_at    timestamptz,
+    build_finished_at   timestamptz,
+    commit_sha          text,
+    commit_message      text,
+    committed_at        timestamptz,
+    committer_name      text,
+    committer_email     text,
+    commit_author_name  text,
+    commit_author_email text,
+    send_to             jsonb
+) as $$
+    declare 
+        _build_id int;
+    begin 
+
+        SELECT 
+            N.build_id INTO _build_id 
+        FROM postgres_ci.notification AS N 
+        ORDER BY N.build_id 
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED;
+
+        IF NOT FOUND THEN 
+            return;
+        END IF;
+
+        return query 
+            SELECT 
+                B.build_id,
+                B.status,
+                P.project_id,
+                P.project_name,
+                BR.branch,
+                B.error,
+                B.created_at,
+                B.started_at,
+                B.finished_at,
+                C.commit_sha,
+                C.commit_message,
+                C.committed_at,
+                C.committer_name,
+                C.committer_email,
+                C.author_name,
+                C.author_email,
+                (
+                    SELECT 
+                        COALESCE(array_to_json(array_agg(P.*)), '[]') 
+                    FROM (
+                        SELECT 
+                            U.user_name,
+                            M.method   AS notify_method,
+                            M.text_id  AS notify_text_id,
+                            M.int_id   AS notify_int_id
+                        FROM postgres_ci.users AS U 
+                        JOIN postgres_ci.user_notification_method AS M ON U.user_id = M.user_id
+                        WHERE U.user_id IN (
+                            SELECT 
+                                P.project_owner_id 
+                        UNION ALL
+                            SELECT 
+                                U.user_id 
+                            FROM postgres_ci.users AS U 
+                            WHERE U.user_email IN (lower(C.author_email), lower(C.committer_email))
+                        ) AND M.method <> 'none'
+                    ) AS P 
+                )::jsonb
+            FROM postgres_ci.builds   AS B 
+            JOIN postgres_ci.projects AS P  ON P.project_id = B.project_id
+            JOIN postgres_ci.commits  AS C  ON C.commit_id  = B.commit_id
+            JOIN postgres_ci.branches AS BR ON BR.branch_id = B.branch_id
+            WHERE B.build_id = _build_id;
+
+        DELETE FROM postgres_ci.notification AS N WHERE N.build_id = _build_id;
+    end;
+$$ language plpgsql security definer rows 1;
+
+
+/* source file: src/functions/notification/find_user_by_telegram_username.sql */
+
+create or replace function notification.find_user_by_telegram_username(_telegram_username text) returns table (
+    user_id    int,
+    telegram_id bigint
+) as $$
+    begin 
+
+        return query 
+            SELECT 
+                N.user_id, 
+                N.int_id 
+            FROM postgres_ci.user_notification_method AS N
+            WHERE N.method  = 'telegram'
+            AND   N.text_id = _telegram_username;
+
+    end;
+$$ language plpgsql security definer rows 1;
+
+/* source file: src/functions/notification/update_method.sql */
+
+create or replace function notification.update_method(
+    _user_id int,
+    _method  postgres_ci.notification_method,
+    _text_id text
+) returns void as $$
+    begin 
+
+        CASE 
+            WHEN _method = 'none' THEN 
+                UPDATE postgres_ci.user_notification_method
+                    SET 
+                        method  = _method,
+                        text_id = '',
+                        int_id  = 0
+                WHERE user_id = _user_id;
+            ELSE 
+                UPDATE postgres_ci.user_notification_method
+                    SET 
+                        method  = _method,
+                        text_id = _text_id,
+                        int_id  = 0
+                WHERE user_id = _user_id AND NOT (
+                    text_id = _text_id AND method = _method
+                );
+        END CASE;
+
     end;
 $$ language plpgsql security definer;
 

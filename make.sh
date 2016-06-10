@@ -22,6 +22,7 @@ src/functions/build/*.sql
 src/functions/project/*.sql
 src/functions/hook/*.sql
 src/functions/password/*.sql
+src/functions/notification/*.sql
 src/functions/users/*.sql"
 
 for file in $FILES
