@@ -352,7 +352,7 @@ create or replace function build.notify(_build_id int) returns boolean as $$
     end;
 $$ language plpgsql security definer;
 
-create or replace function notification.get_user_method(
+create or replace function notification.get_method(
     _user_id    int,
     out method  text,
     out text_id text,

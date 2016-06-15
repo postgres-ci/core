@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="0.3"
+VERSION="0.4"
 
 echo "
 \echo Use \"CREATE EXTENSION postgres_ci\" to load this file. \quit
